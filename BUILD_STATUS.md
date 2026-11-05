@@ -12,3 +12,7 @@
 - 未连接真机或模拟器：不宣称 CameraX 预览、OPPO 相机硬件、手感或 MediaStore 相册端到端验收通过。README 有真机清单。
 - 独立本地仓库已建立于 /workspace/guangshi，原 /workspace/qingping 保持不变。GitHub API 被当前网络策略返回 CONNECT 403，远端仓库创建未成功，Actions 尚未运行；没有发布到 GitHub 的 APK 链接。
 - 配置草稿已保存 api.github.com 域名要求、install_script 和 start_skill；草稿保存不等于已应用或发布。需在环境设置中审阅保存网络规则后重新尝试创建远端仓库。新任务恢复尚未验证，本地提交不可视为已远端备份。
+
+## GitHub 交付更新
+
+仓库已成功推送到 https://github.com/02Caesar/guangshi 。已验证的调试 APK 同步到 downloads/guangshi-debug.apk，README 顶部提供直接下载入口。首次 GitHub Actions 运行失败，未宣称其构建成功；此前本地构建与签名验证结果不变。

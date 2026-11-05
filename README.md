@@ -1,5 +1,9 @@
 # 光室 · 原生 Android 胶片相机
 
+**[点此直接下载 Android 调试 APK（约 26 MB）](https://raw.githubusercontent.com/02Caesar/guangshi/main/downloads/guangshi-debug.apk)**
+
+下载后在手机中打开 APK 安装。此包已在开发环境构建并校验签名，仍需 OPPO 真机验收。
+
 Kotlin + Jetpack Compose + CameraX；优先针对 OPPO Find X8s+ / ColorOS 的普通竖屏设计。Android 10（API 29）及以上。不请求网络或相册读写权限，无登录、无云端处理。
 
 ## 首版流程
@@ -27,7 +31,7 @@ APK：`app/build/outputs/apk/debug/app-debug.apk`。将 APK 传到手机打开�
 
 ## GitHub Actions 下载
 
-工程内附 `.github/workflows/android.yml`，支持推送 main 与手动 `workflow_dispatch`。远端仓库发布后，在 **Actions → 光室 Debug APK → Run workflow → main → Run workflow** 运行。成功后打开运行记录的 **Artifacts → guangshi-debug-apk**（登录 GitHub），下载 ZIP，解压得到 APK。Artifact 保留 14 天。当前工作流尚未在 GitHub 运行，不能把它当作已有 APK 下载链接。
+工程内附 `.github/workflows/android.yml`，支持推送 main 与手动 `workflow_dispatch`。远端仓库发布后，在 **Actions → 光室 Debug APK → Run workflow → main → Run workflow** 运行。成功后打开运行记录的 **Artifacts → guangshi-debug-apk**（登录 GitHub），下载 ZIP，解压得到 APK。Artifact 保留 14 天。首次 GitHub Actions 运行失败，未产生可下载的 Artifact；请使用本页顶部已经构建好的 APK 下载链接。
 
 ## 验收状态
 
