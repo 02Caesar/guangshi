@@ -11,26 +11,52 @@ import kotlin.math.*
 import kotlinx.coroutines.ensureActive
 import kotlin.coroutines.coroutineContext
 
-enum class Film(val title: String, val code: String, val grain: Float) {
-    DAY("暖调日光", "光 400", 0.18f), NIGHT("冷调夜景", "夜 800", 0.28f), MONO("高反差黑白", "银 100", 0.36f)
+enum class Film(val title: String, val code: String, val grain: Float, val note: String) {
+    NATURAL("原生", "N · 00", 0f, "保留眼前的光"),
+    DAY("暖日光", "D · 400", .18f, "金色高光，温暖肤色"),
+    NIGHT("冷夜景", "N · 800", .28f, "冷蓝阴影，城市夜色"),
+    MONO("银盐黑白", "B · 100", .36f, "深黑与明亮的银"),
+    FADE("褪色记忆", "F · 200", .24f, "低反差，柔和旧时光"),
+    CINEMA("青橙电影", "C · 500", .12f, "青色暗部，琥珀亮部")
 }
-data class Adjust(val exposure: Float = 0f, val grain: Float = 0.18f, val cyan: Float = 0f, val magenta: Float = 0f, val yellow: Float = 0f)
-data class Negative(val id: String, val film: Film, val adjust: Adjust)
+data class Adjust(
+    val exposure: Float = 0f, val grain: Float = 0f,
+    val cyan: Float = 0f, val magenta: Float = 0f, val yellow: Float = 0f,
+    val contrast: Float = 1f, val saturation: Float = 1f, val warmth: Float = 0f,
+    val aperture: Float = 16f, val focusX: Float = .5f, val focusY: Float = .45f
+)
+data class Negative(val id: String, val film: Film, val adjust: Adjust, val focalMm: Int = 24)
 class FilmStore(val context: Context) {
     val dir = File(context.filesDir, "negatives").apply { mkdirs() }
     fun original(id: String) = File(dir, "$id.jpg")
     fun list(): List<Negative> = dir.listFiles().orEmpty().filter { it.extension == "json" }.mapNotNull { f ->
-        runCatching { val j=JSONObject(f.readText()); val film=Film.valueOf(j.getString("film")); Negative(f.nameWithoutExtension,film,Adjust(j.optDouble("exposure",0.0).toFloat(),j.optDouble("grain",film.grain.toDouble()).toFloat(),j.optDouble("cyan",0.0).toFloat(),j.optDouble("magenta",0.0).toFloat(),j.optDouble("yellow",0.0).toFloat())) }.getOrNull()
+        runCatching {
+            val j = JSONObject(f.readText())
+            val film = Film.entries.find { it.name == j.getString("film") } ?: Film.NATURAL
+            fun read(key: String, default: Float) = j.optDouble(key, default.toDouble()).toFloat().let { if (it.isFinite()) it else default }
+            Negative(f.nameWithoutExtension, film, Adjust(
+                exposure=read("exposure",0f).coerceIn(-2f,2f), grain=read("grain",film.grain).coerceIn(0f,1f),
+                cyan=read("cyan",0f).coerceIn(-1f,1f), magenta=read("magenta",0f).coerceIn(-1f,1f), yellow=read("yellow",0f).coerceIn(-1f,1f),
+                contrast=read("contrast",1f).coerceIn(.5f,1.5f), saturation=read("saturation",1f).coerceIn(0f,1.5f), warmth=read("warmth",0f).coerceIn(-1f,1f),
+                aperture=read("aperture",16f).coerceIn(1.4f,16f), focusX=read("focusX",.5f).coerceIn(0f,1f), focusY=read("focusY",.45f).coerceIn(0f,1f)
+            ), j.optInt("focalMm",24))
+        }.getOrNull()
     }.filter { original(it.id).exists() }.sortedByDescending { it.id }
+
     fun save(n: Negative) {
-        val j=JSONObject().put("film",n.film.name).put("exposure",n.adjust.exposure).put("grain",n.adjust.grain).put("cyan",n.adjust.cyan).put("magenta",n.adjust.magenta).put("yellow",n.adjust.yellow)
-        val tmp=File(dir,"${n.id}.tmp"); tmp.writeText(j.toString()); check(tmp.renameTo(File(dir,"${n.id}.json")))
+        val a=n.adjust
+        val j=JSONObject().put("film",n.film.name).put("focalMm",n.focalMm)
+            .put("exposure",a.exposure).put("grain",a.grain).put("cyan",a.cyan).put("magenta",a.magenta).put("yellow",a.yellow)
+            .put("contrast",a.contrast).put("saturation",a.saturation).put("warmth",a.warmth)
+            .put("aperture",a.aperture).put("focusX",a.focusX).put("focusY",a.focusY)
+        val tmp=File(dir,"${n.id}.tmp")
+        tmp.writeText(j.toString())
+        check(tmp.renameTo(File(dir,"${n.id}.json"))) { "底片参数写入失败" }
     }
     fun load(id: String, maxEdge: Int): Bitmap {
         val file=original(id)
         val bounds=BitmapFactory.Options().apply { inJustDecodeBounds=true }; BitmapFactory.decodeFile(file.path,bounds)
-        var sample=1
-        while(max(bounds.outWidth,bounds.outHeight)/sample > maxEdge*2) sample*=2
+        val sample=DecodeSizing.sampleSize(bounds.outWidth,bounds.outHeight,maxEdge)
         val decoded=requireNotNull(BitmapFactory.decodeFile(file.path,BitmapFactory.Options().apply { inSampleSize=sample; inPreferredConfig=Bitmap.Config.ARGB_8888 }))
         val exif=ExifInterface(file)
         val matrix=Matrix().apply { if(exif.isFlipped) postScale(-1f,1f); postRotate(exif.rotationDegrees.toFloat()) }
@@ -73,6 +99,6 @@ suspend fun develop(source: Bitmap, film: Film, a: Adjust): Bitmap {
             }
             out.setPixels(row,0,w,0,y,w,1)
         }
-        return out
+        return applyAperture(out,a)
     } catch(e: Throwable) { out.recycle(); throw e }
 }

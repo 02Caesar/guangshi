@@ -3,10 +3,11 @@ android {
  namespace = "com.guangshi.app"
  compileSdk = 35
  buildToolsVersion = "35.0.0"
- defaultConfig { applicationId = "com.guangshi.app"; minSdk = 29; targetSdk = 35; versionCode = 1; versionName = "0.1.0"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
+ defaultConfig { applicationId = "com.guangshi.app"; minSdk = 29; targetSdk = 35; versionCode = 2; versionName = "0.2.0"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
  compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
  kotlinOptions { jvmTarget = "17" }
  buildFeatures { compose = true }
+ testOptions { unitTests.isIncludeAndroidResources = true }
 }
 dependencies {
  implementation(platform("androidx.compose:compose-bom:2024.12.01"))
@@ -20,4 +21,8 @@ dependencies {
  implementation("androidx.camera:camera-view:1.4.1")
  implementation("androidx.exifinterface:exifinterface:1.3.7")
  testImplementation("junit:junit:4.13.2")
+ testImplementation("org.robolectric:robolectric:4.14.1")
+ testImplementation("androidx.test:core:1.6.1")
+ testImplementation("androidx.compose.ui:ui-test-junit4")
+ debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
