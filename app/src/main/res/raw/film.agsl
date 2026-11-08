@@ -1,0 +1,47 @@
+uniform shader image;
+uniform float2 size;
+uniform int film;
+uniform float4 toneSettings; // gain, grain, contrast, saturation
+uniform float4 colors;       // cyan, magenta, yellow, warmth
+uniform float3 focus;        // aperture, x, y
+
+float curve(float v, float k) { return clamp((v-0.5)*k+0.5,0.0,1.0); }
+float3 grade(float2 position) {
+    float2 p=clamp(position,float2(0.5),size-float2(0.5));
+    float3 c=float3(image.eval(p).rgb);
+    float r=c.r, g=c.g, b=c.b;
+    if(film==1) { r=curve(r,1.06)*1.06+0.018; g=curve(g,1.02)*1.01; b=curve(b,0.94)*0.9+0.015; }
+    else if(film==2) { r=curve(r,1.12)*0.88; g=curve(g,1.08)*1.02+0.012; b=curve(b,1.08)*1.13+0.025; }
+    else if(film==3) { float l=curve(dot(float3(r,g,b),float3(0.2126,0.7152,0.0722)),1.48); r=l;g=l;b=l; }
+    else if(film==4) { r=curve(r,0.77)*1.02+0.035;g=curve(g,0.8)+0.02;b=curve(b,0.72)*0.93+0.05; }
+    else if(film==5) { float l=dot(float3(r,g,b),float3(0.2126,0.7152,0.0722));r=curve(r,1.12)+l*0.075-(1.0-l)*0.04;g=curve(g,1.06)+(1.0-l)*0.03;b=curve(b,1.1)+(1.0-l)*0.085-l*0.055; }
+    c=float3(r,g,b);
+    if(film!=3) {
+        float l=dot(c,float3(0.2126,0.7152,0.0722));
+        c=float3(l)+(c-float3(l))*toneSettings.w+float3(colors.w*0.08,0,-colors.w*0.08);
+    }
+    c=(c-float3(0.5))*toneSettings.z+float3(0.5);
+    // AGSL forbids bit shifts. Use a stable floating-point grain hash on the normalized grid.
+    float2 grid=floor(floor(p)*1600.0/size);
+    float3 h=fract(float3(grid.x,grid.y,grid.x)*float3(0.1031,0.1030,0.0973));
+    h+=dot(h,h.yxz+float3(33.33));
+    float noise=(fract((h.x+h.y)*h.z)-0.5)*toneSettings.y*0.24;
+    c=c*toneSettings.x-(film==3?float3(0):colors.rgb*0.16)+float3(noise);
+    return floor(clamp(c,0.0,1.0)*255.0+0.5)/255.0;
+}
+half4 main(float2 p) {
+    float3 sharp=grade(p);
+    if(focus.x>=16.0) return half4(sharp,1);
+    float strength=clamp((16.0-focus.x)/14.6,0.0,1.0);
+    float2 relative=(p/size-focus.yz)/float2(0.34,0.29);
+    float mask=smoothstep(0.48,1.43,length(relative))*strength;
+    if(mask<0.001) return half4(sharp,1);
+    float s=(2.0+strength*10.0)*max(size.x,size.y)/480.0;
+    float3 blurred=sharp*0.12;
+    blurred+=(grade(p+float2(s,0))+grade(p-float2(s,0))+grade(p+float2(0,s))+grade(p-float2(0,s)))*0.10;
+    blurred+=(grade(p+float2(s,s))+grade(p-float2(s,s))+grade(p+float2(s,-s))+grade(p+float2(-s,s)))*0.07;
+    blurred+=(grade(p+float2(2*s,0))+grade(p-float2(2*s,0))+grade(p+float2(0,2*s))+grade(p-float2(0,2*s)))*0.025;
+    float t=1.41421356*s;
+    blurred+=(grade(p+float2(t,t))+grade(p-float2(t,t))+grade(p+float2(t,-t))+grade(p+float2(-t,t)))*0.025;
+    return half4(mix(sharp,blurred,mask),1);
+}

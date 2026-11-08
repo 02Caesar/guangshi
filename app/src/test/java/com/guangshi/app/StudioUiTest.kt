@@ -42,7 +42,7 @@ class StudioUiTest {
         compose.onNodeWithText("金色高光，温暖肤色").assertExists()
         compose.onNodeWithText("曝光").performClick()
         compose.onNodeWithContentDescription("曝光 EV").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(.65f) }
-        compose.runOnIdle { Assert.assertEquals(.65f,model.cameraAdjust.exposure,.001f) }
+        compose.runOnIdle { Assert.assertEquals(.7f,model.cameraAdjust.exposure,.001f) }
         compose.onNodeWithContentDescription("快门").assertIsDisplayed()
         saveScreenshot("camera")
     }
@@ -53,7 +53,7 @@ class StudioUiTest {
         compose.waitUntil(10000) { compose.onAllNodesWithContentDescription("实时画面").fetchSemanticsNodes().isNotEmpty() }
         val originalRed=centerRed()
         compose.onNodeWithContentDescription("红 R").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(.6f) }
-        compose.onNodeWithText("0.60").assertExists()
+        compose.onNodeWithText("0.6").assertExists()
         compose.waitUntil(10000) { centerRed()>originalRed+15 }
         compose.onNodeWithText("冲印 · 导出到系统相册").assertExists()
         compose.onNodeWithContentDescription("实时画面").assertExists()
@@ -65,6 +65,18 @@ class StudioUiTest {
         compose.onNodeWithText("暗房 ↗").performClick()
         compose.onNodeWithText("冲印 · 导出到系统相册").performScrollTo().assertIsDisplayed()
         saveScreenshot("compact")
+    }
+    @Test fun controlsStayAboveLargePreviewAndNeverResizeIt() {
+        val frame=compose.onNodeWithContentDescription("相机取景区域").fetchSemanticsNode().boundsInRoot
+        val top=compose.onNodeWithText("曝光").fetchSemanticsNode().boundsInRoot
+        Assert.assertTrue(top.bottom<=frame.top)
+        Assert.assertTrue(frame.height>=frame.width*1.25f)
+        compose.onNodeWithText("曝光").performClick()
+        val expanded=compose.onNodeWithContentDescription("相机取景区域").fetchSemanticsNode().boundsInRoot
+        Assert.assertEquals(frame,expanded)
+        compose.onNodeWithText("24 ↻ 28 / 35    73 ↻ 85").assertDoesNotExist()
+        compose.onNodeWithContentDescription("曝光 EV 增加 0.1").performClick()
+        compose.runOnIdle {Assert.assertEquals(.1f,model.cameraAdjust.exposure)}
     }
     private fun centerRed():Int {
         val center=compose.onNodeWithContentDescription("实时画面").fetchSemanticsNode().boundsInRoot.center

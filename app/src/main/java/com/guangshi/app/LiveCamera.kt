@@ -9,6 +9,8 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Rational
 import android.util.Size
+import android.util.Range
+import androidx.camera.view.PreviewView
 import android.view.Display
 import android.view.OrientationEventListener
 import android.view.Surface
@@ -30,7 +32,7 @@ import kotlin.math.hypot
 
 internal data class RenderSettings(val film: Film, val adjust: Adjust)
 
-/** A latest-frame-only worker drives the actual viewfinder through the same processor as export. */
+/** Native Preview drives supported phones; the latest-frame CPU renderer remains a pre-Android-13 fallback. */
 @androidx.annotation.OptIn(markerClass = [ExperimentalCamera2Interop::class])
 internal class LiveCamera(
     private val context: Context,
@@ -41,6 +43,7 @@ internal class LiveCamera(
     private val onLens: (Int, LensPlan) -> Unit,
     private val onCapture: (ImageCapture?) -> Unit,
     private val onError: (String) -> Unit,
+    private val previewView: PreviewView? = null,
     initialMm: Int = 24
 ) {
     val settings=AtomicReference(RenderSettings(Film.NATURAL,Adjust()))
@@ -49,6 +52,7 @@ internal class LiveCamera(
     private val main=Handler(Looper.getMainLooper())
     private var provider: ProcessCameraProvider?=null
     private var camera: Camera?=null
+    private var preview: Preview?=null
     private var analysis: ImageAnalysis?=null
     private var capture: ImageCapture?=null
     private var lenses: List<LensSpec> = emptyList()
@@ -104,14 +108,22 @@ internal class LiveCamera(
                 val aspect=AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY
                 val rs=ResolutionSelector.Builder().setAspectRatioStrategy(aspect)
                     .setResolutionStrategy(ResolutionStrategy(Size(640,480),ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER)).build()
-                analysis=ImageAnalysis.Builder().setResolutionSelector(rs).setTargetRotation(rotation)
-                    .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
-                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build().also { it.setAnalyzer(worker,::analyze) }
+                if(previewView!=null) {
+                    preview=Preview.Builder().setResolutionSelector(ResolutionSelector.Builder().setAspectRatioStrategy(aspect).build())
+                        .setTargetRotation(rotation).setTargetFrameRate(Range(30,30)).build()
+                        .also { it.setSurfaceProvider(previewView.surfaceProvider) }
+                } else {
+                    analysis=ImageAnalysis.Builder().setResolutionSelector(rs).setTargetRotation(rotation)
+                        .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build().also { it.setAnalyzer(worker,::analyze) }
+                }
                 capture=ImageCapture.Builder().setResolutionSelector(ResolutionSelector.Builder().setAspectRatioStrategy(aspect).build())
                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).setTargetRotation(rotation).build()
                 val ratio=if(rotation==Surface.ROTATION_90 || rotation==Surface.ROTATION_270) Rational(4,3) else Rational(3,4)
-                val group=UseCaseGroup.Builder().setViewPort(ViewPort.Builder(ratio,rotation).setScaleType(ViewPort.FILL_CENTER).build())
-                    .addUseCase(analysis!!).addUseCase(capture!!).build()
+                val builder=UseCaseGroup.Builder().setViewPort(ViewPort.Builder(ratio,rotation).setScaleType(ViewPort.FILL_CENTER).build())
+                    .addUseCase(capture!!)
+                preview?.let { builder.addUseCase(it) }; analysis?.let { builder.addUseCase(it) }
+                val group=builder.build()
                 camera=provider!!.bindToLifecycle(owner,selector,group)
                 activeId=plan.lens.id
                 orientation.enable()
@@ -157,9 +169,9 @@ internal class LiveCamera(
 
     private fun unbind() {
         analysis?.clearAnalyzer()
-        val useCases=listOfNotNull(analysis,capture)
+        val useCases=listOfNotNull(preview,analysis,capture)
         if(useCases.isNotEmpty()) provider?.unbind(*useCases.toTypedArray())
-        camera=null; capture=null; analysis=null; activeId=null
+        camera=null; capture=null; analysis=null; preview=null; activeId=null
     }
     fun close() {
         stopped.set(true); requestGeneration++; orientation.disable(); unbind(); worker.shutdown()

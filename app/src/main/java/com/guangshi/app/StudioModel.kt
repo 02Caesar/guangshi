@@ -25,7 +25,7 @@ class StudioModel(app: Application): AndroidViewModel(app) {
     private val saveMutex=Mutex()
     init { reload() }
 
-    fun chooseFilm(value: Film) { film=value; cameraAdjust=cameraAdjust.copy(grain=value.grain) }
+    fun chooseFilm(value: Film) { film=value; cameraAdjust=cameraAdjust.copy(grain=TickScale(0f,1f).snap(value.grain)) }
     fun reload() { viewModelScope.launch { negatives=withContext(Dispatchers.IO) { store.list() } } }
     fun capture(capture: ImageCapture?) {
         if(shooting || capture==null)return

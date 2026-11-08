@@ -35,7 +35,7 @@ class FilmStore(val context: Context) {
             val film = Film.entries.find { it.name == j.getString("film") } ?: Film.NATURAL
             fun read(key: String, default: Float) = j.optDouble(key, default.toDouble()).toFloat().let { if (it.isFinite()) it else default }
             Negative(f.nameWithoutExtension, film, Adjust(
-                exposure=read("exposure",0f).coerceIn(-2f,2f), grain=read("grain",film.grain).coerceIn(0f,1f),
+                exposure=read("exposure",0f).coerceIn(-3f,3f), grain=read("grain",film.grain).coerceIn(0f,1f),
                 cyan=read("cyan",0f).coerceIn(-1f,1f), magenta=read("magenta",0f).coerceIn(-1f,1f), yellow=read("yellow",0f).coerceIn(-1f,1f),
                 contrast=read("contrast",1f).coerceIn(.5f,1.5f), saturation=read("saturation",1f).coerceIn(0f,1.5f), warmth=read("warmth",0f).coerceIn(-1f,1f),
                 aperture=read("aperture",16f).coerceIn(1.4f,16f), focusX=read("focusX",.5f).coerceIn(0f,1f), focusY=read("focusY",.45f).coerceIn(0f,1f)

@@ -6,6 +6,10 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
+import androidx.camera.view.PreviewView
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Observer
 import android.provider.Settings
 import android.view.HapticFeedbackConstants
 import androidx.activity.ComponentActivity
@@ -85,10 +89,10 @@ class MainActivity: ComponentActivity() {
     Scaffold(containerColor=Ink,snackbarHost={ SnackbarHost(snackbar) },contentWindowInsets=WindowInsets.safeDrawing) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).background(Brush.verticalGradient(listOf(if(darkroom)Color(0xFF301B1C) else Color(0xFF252422),Ink)))) {
             Column(Modifier.fillMaxSize().padding(horizontal=18.dp)) {
-                Row(Modifier.fillMaxWidth().height(62.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
+                Row(Modifier.fillMaxWidth().height(if(darkroom)54.dp else 38.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
                     Column {
-                        Text("光室",color=Paper,fontSize=27.sp,fontFamily=FontFamily.Serif,letterSpacing=6.sp)
-                        Text(if(darkroom)"让记忆慢慢显影" else "收集光，也收藏时间",color=Soft,fontSize=10.sp,letterSpacing=2.sp)
+                        Text("光室",color=Paper,fontSize=if(darkroom)25.sp else 22.sp,fontFamily=FontFamily.Serif,letterSpacing=6.sp)
+                        if(darkroom)Text("让记忆慢慢显影",color=Soft,fontSize=10.sp,letterSpacing=2.sp)
                     }
                     TextButton(onClick={darkroom=!darkroom}) { Text(if(darkroom)"返回相机 ↗" else "暗房 ↗",color=Amber,fontSize=13.sp) }
                 }
@@ -109,10 +113,15 @@ class MainActivity: ComponentActivity() {
         lifecycle.lifecycle.addObserver(observer)
         onDispose { lifecycle.lifecycle.removeObserver(observer) }
     }
+    val gpu=remember { if(Build.VERSION.SDK_INT>=33)runCatching { GpuFilmEffect(context) }.getOrNull() else null }
+    val preview=remember { if(gpu!=null)PreviewView(context).apply {
+        implementationMode=PreviewView.ImplementationMode.COMPATIBLE
+        scaleType=PreviewView.ScaleType.FILL_CENTER
+    } else null }
     var frame by remember { mutableStateOf<Bitmap?>(null) }
     var capture by remember { mutableStateOf<ImageCapture?>(null) }
     var catalog by remember { mutableStateOf<List<LensSpec>>(emptyList()) }
-    var lensDescription by remember { mutableStateOf("正在读取镜头…") }
+    var lensDescription by remember { mutableStateOf("开启相机后读取镜头") }
     var session by remember { mutableStateOf<LiveCamera?>(null) }
     var showLenses by remember { mutableStateOf(false) }
     var retry by remember { mutableIntStateOf(0) }
@@ -124,82 +133,97 @@ class MainActivity: ComponentActivity() {
         val controller=if(granted) LiveCamera(context,lifecycle,view.display,
             onFrame={frame=it; connecting=false},onCatalog={catalog=it},
             onLens={mm,plan->vm.focalMm=mm; lensDescription=plan.description},onCapture={capture=it},
-            onError={if(!failed)vm.message=it; failed=true; connecting=false},initialMm=vm.focalMm
-        ).also { it.settings.set(RenderSettings(vm.film,vm.cameraAdjust)); it.start() } else null
+            onError={if(!failed)vm.message=it;failed=true;connecting=false},previewView=preview,initialMm=vm.focalMm
+        ).also {it.settings.set(RenderSettings(vm.film,vm.cameraAdjust));it.start()} else null
+        val streamObserver=Observer<PreviewView.StreamState> {state->if(state==PreviewView.StreamState.STREAMING)connecting=false}
+        if(granted)preview?.previewStreamState?.observe(lifecycle,streamObserver)
         session=controller
-        onDispose { controller?.close(); session=null; capture=null }
+        onDispose {preview?.previewStreamState?.removeObserver(streamObserver);controller?.close();session=null;capture=null}
     }
     SideEffect { session?.settings?.set(RenderSettings(vm.film,vm.cameraAdjust)) }
     if(showLenses) AlertDialog(onDismissRequest={showLenses=false},title={Text("镜头与光圈")},text={
         Text("${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}\n系统向本应用开放的后置镜头：\n"+
-            catalog.joinToString("\n") { "约 ${it.equivalentMm.roundToInt()}mm · ${it.minZoom}–${it.maxZoom}× · 物理光圈 ${it.apertures.joinToString { f->"ƒ/$f" }}" }+
-            "\n\n焦段由传感器尺寸与焦距估算。系统未开放的焦段会置灰；高倍率可能是数码裁切。\n模拟光圈是以点击区域为中心的渐变虚化，不控制物理光圈，不识别真实景深。")
+            catalog.joinToString("\n") {"约 ${it.equivalentMm.roundToInt()}mm · ${it.minZoom}–${it.maxZoom}× · 物理光圈 ${it.apertures.joinToString { f->"ƒ/$f" }}"}+
+            "\n\n焦段为等效值估算。系统未开放的焦段置灰，高倍率可能是数码裁切。模拟光圈为区域虚化，不控制物理光圈。")
     },confirmButton={TextButton(onClick={showLenses=false}) {Text("知道了")}})
     BoxWithConstraints(modifier) {
-        val extra=when(edit) { "色彩"->144.dp; "光圈"->92.dp; "曝光","颗粒"->48.dp; else->0.dp }
-        val imageHeight=(maxHeight-418.dp-extra).coerceIn(190.dp,580.dp)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),horizontalAlignment=Alignment.CenterHorizontally) {
-            Row(Modifier.fillMaxWidth().padding(top=4.dp,bottom=5.dp),horizontalArrangement=Arrangement.SpaceBetween) {
-                Text("LIVE  /  ${vm.film.code}",color=Amber,fontSize=10.sp,letterSpacing=2.sp)
-                Text("▸ ${"%03d".format(vm.negatives.size+1)}",color=Amber,fontSize=11.sp,fontFamily=FontFamily.Monospace)
-            }
-            Box(Modifier.fillMaxWidth().height(imageHeight).clip(RoundedCornerShape(3.dp)).background(Color.Black),contentAlignment=Alignment.Center) {
-                if(granted) {
-                    FrameImage(frame,Modifier.fillMaxSize(),onPoint={x,y->
-                        vm.cameraAdjust=vm.cameraAdjust.copy(focusX=x,focusY=y)
-                        session?.focus(x,y)
-                    },focus=if(vm.cameraAdjust.aperture<16f)vm.cameraAdjust else null)
-                    if(connecting) CircularProgressIndicator(Modifier.size(24.dp),color=Amber,strokeWidth=2.dp)
-                    if(failed) TextButton(onClick={retry++}) { Text("重新连接镜头") }
-                } else Column(horizontalAlignment=Alignment.CenterHorizontally,modifier=Modifier.padding(24.dp)) {
-                    Text("让光进入镜头",fontFamily=FontFamily.Serif,fontSize=22.sp,color=Paper)
-                    Text("照片只留在本机",fontSize=12.sp,color=Soft,modifier=Modifier.padding(12.dp))
-                    Button(onClick={permission.launch(Manifest.permission.CAMERA)}) { Text("开启相机") }
-                    TextButton(onClick={context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:${context.packageName}")))}) { Text("权限设置",fontSize=12.sp) }
-                }
-
-            }
-            Row(Modifier.fillMaxWidth().padding(vertical=4.dp),horizontalArrangement=Arrangement.SpaceBetween) {
-                Text(vm.film.note,color=Soft,fontSize=10.sp)
-                Text("${vm.focalMm} mm  /  ${if(vm.cameraAdjust.aperture>=16)"清晰" else "ƒ${vm.cameraAdjust.aperture} 模拟"}",color=Amber,fontSize=10.sp)
-            }
-            LazyRow(horizontalArrangement=Arrangement.spacedBy(6.dp),modifier=Modifier.fillMaxWidth().height(42.dp),verticalAlignment=Alignment.CenterVertically) {
-                items(listOf(15,24,49,73,146)) { group ->
-                    val selected=when(group) {24->vm.focalMm in listOf(24,28,35);73->vm.focalMm in listOf(73,85);else->vm.focalMm==group}
-                    val target=if(selected)nextFocal(group,vm.focalMm) else group
-                    val supported=catalog.isEmpty() || chooseLens(catalog,target)!=null
-                    Choice(if(selected)"${vm.focalMm}${if(group==24||group==73)" ·" else ""}" else "$group",selected,supported&&!vm.shooting) {
-                        if(catalog.isNotEmpty()) { capture=null; session?.selectFocal(target) }
-                    }
-                }
-            }
-            Row(Modifier.fillMaxWidth().padding(bottom=4.dp),horizontalArrangement=Arrangement.SpaceBetween) {
-                Text("$lensDescription ⓘ",color=Soft,fontSize=9.sp,modifier=Modifier.clickable { showLenses=true })
-                Text("24 ↻ 28 / 35    73 ↻ 85",color=Soft,fontSize=9.sp)
-            }
+        val compact=maxHeight<540.dp
+        Column(Modifier.fillMaxWidth().then(if(compact)Modifier.verticalScroll(rememberScrollState()) else Modifier.fillMaxHeight())) {
             ParameterTabs(edit,{edit=if(edit==it)"" else it},listOf("曝光","颗粒","色彩","光圈"))
-            AnimatedVisibility(edit.isNotEmpty()) {
-                AdjustmentPanel(edit,vm.cameraAdjust,vm.film,{vm.cameraAdjust=it},{})
+            Row(Modifier.fillMaxWidth().padding(vertical=4.dp),horizontalArrangement=Arrangement.SpaceBetween) {
+                Text("${vm.film.title} · ${vm.film.code}",color=Amber,fontSize=10.sp)
+                Text("▸ ${"%03d".format(vm.negatives.size+1)}",color=Amber,fontSize=10.sp,fontFamily=FontFamily.Monospace)
             }
-            FilmStrip(vm.film,{if(!vm.shooting)vm.chooseFilm(it)},Modifier.padding(top=6.dp))
-            Row(Modifier.fillMaxWidth().height(112.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
-                FilmDial(vm.film.ordinal,{if(!vm.shooting)vm.chooseFilm(Film.entries[it])})
-                Box(Modifier.size(86.dp).border(1.dp,Amber.copy(alpha=.5f),CircleShape).padding(5.dp)
-                    .clip(CircleShape).background(Brush.radialGradient(listOf(Paper,Color(0xFFBFB6A7))))
-                    .clickable(enabled=capture!=null&&!connecting&&!vm.shooting) { view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY); vm.capture(capture) }
-                    .semantics { contentDescription=if(vm.shooting)"正在保存照片" else "快门" },contentAlignment=Alignment.Center) {
-                    if(vm.shooting) CircularProgressIndicator(Modifier.size(26.dp),color=Ink,strokeWidth=2.dp)
-                    else Box(Modifier.size(65.dp).border(1.dp,Color(0xFF988C78),CircleShape))
-                }
-                Column(horizontalAlignment=Alignment.CenterHorizontally,modifier=Modifier.width(74.dp).clickable(onClick=open)) {
-                    Box(Modifier.size(58.dp).clip(RoundedCornerShape(3.dp)).border(1.dp,Amber.copy(alpha=.4f)).background(Color.Black).padding(4.dp),contentAlignment=Alignment.Center) {
-                        vm.negatives.firstOrNull()?.let { Thumb(vm,it) }?:Text("＋",color=Amber,fontSize=20.sp)
+            Box(Modifier.fillMaxWidth().then(if(compact)Modifier.height(340.dp) else Modifier.weight(1f)).background(Color.Black)
+                .semantics {contentDescription="相机取景区域"},contentAlignment=Alignment.Center) {
+                BoxWithConstraints(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) {
+                    val aspect=if(view.display?.rotation==android.view.Surface.ROTATION_90||view.display?.rotation==android.view.Surface.ROTATION_270)4f/3f else 3f/4f
+                    val imageWidth=minOf(maxWidth,maxHeight*aspect)
+                    Box(Modifier.width(imageWidth).height(imageWidth/aspect)) {
+                        if(granted) {
+                            if(preview!=null&&gpu!=null&&Build.VERSION.SDK_INT>=33) {
+                                AndroidView(factory={FilteredPreviewHost(it).apply {attachPreview(preview,gpu)}},
+                                    update={it.update(RenderSettings(vm.film,vm.cameraAdjust))},modifier=Modifier.fillMaxSize())
+                                val latestFocus=rememberUpdatedState<(Float,Float)->Unit> {x,y->vm.cameraAdjust=vm.cameraAdjust.copy(focusX=x,focusY=y);session?.focus(x,y)}
+                                Box(Modifier.fillMaxSize().pointerInput(Unit) {detectTapGestures {p->latestFocus.value((p.x/size.width).coerceIn(0f,1f),(p.y/size.height).coerceIn(0f,1f))}})
+                                if(vm.cameraAdjust.aperture<16f)FocusMark(vm.cameraAdjust,Modifier.fillMaxSize())
+                            } else FrameImage(frame,Modifier.fillMaxSize(),onPoint={x,y->vm.cameraAdjust=vm.cameraAdjust.copy(focusX=x,focusY=y);session?.focus(x,y)},focus=if(vm.cameraAdjust.aperture<16f)vm.cameraAdjust else null)
+                            if(connecting&&!failed)CircularProgressIndicator(Modifier.size(24.dp).align(Alignment.Center),color=Amber,strokeWidth=2.dp)
+                            if(failed)TextButton(onClick={retry++},modifier=Modifier.align(Alignment.Center)) {Text("重新连接镜头")}
+                        } else Column(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.Center,horizontalAlignment=Alignment.CenterHorizontally) {
+                            Text("让光进入镜头",fontFamily=FontFamily.Serif,fontSize=22.sp,color=Paper)
+                            Text("照片只留在本机",fontSize=12.sp,color=Soft,modifier=Modifier.padding(12.dp))
+                            Button(onClick={permission.launch(Manifest.permission.CAMERA)}) {Text("开启相机")}
+                            TextButton(onClick={context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:${context.packageName}")))}) {Text("权限设置",fontSize=12.sp)}
+                        }
+                        if(edit.isNotEmpty()) {
+                            Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().background(Color.Black.copy(alpha=.86f)).padding(horizontal=10.dp,vertical=4.dp)
+                                .heightIn(max=if(edit=="色彩")232.dp else 180.dp).verticalScroll(rememberScrollState())) {
+                                AdjustmentPanel(edit,vm.cameraAdjust,vm.film,{vm.cameraAdjust=it},{})
+                                TextButton(onClick={edit=""},modifier=Modifier.align(Alignment.End).height(30.dp),contentPadding=PaddingValues(horizontal=10.dp,vertical=0.dp)) {Text("收起",fontSize=10.sp)}
+                            }
+                        }
+                        if(granted) LazyRow(Modifier.align(Alignment.BottomCenter).padding(bottom=8.dp).background(Color.Black.copy(alpha=.38f),RoundedCornerShape(24.dp)).padding(horizontal=5.dp,vertical=3.dp),
+                            horizontalArrangement=Arrangement.spacedBy(3.dp),verticalAlignment=Alignment.CenterVertically) {
+                            items(listOf(15,24,49,73,146)) {group->
+                                val selected=when(group) {24->vm.focalMm in listOf(24,28,35);73->vm.focalMm in listOf(73,85);else->vm.focalMm==group}
+                                val target=if(selected)nextFocal(group,vm.focalMm) else group
+                                val supported=catalog.isNotEmpty()&&chooseLens(catalog,target)!=null
+                                Choice(if(selected)"${vm.focalMm}" else "$group",selected,supported&&!vm.shooting) {capture=null;session?.selectFocal(target)}
+                            }
+                        }
                     }
-                    Text("底片盒",color=Soft,fontSize=10.sp,modifier=Modifier.padding(top=6.dp))
                 }
             }
-            Text("光 室  /  私 人 胶 片 档 案",color=Soft.copy(alpha=.6f),fontSize=8.sp,letterSpacing=2.sp,modifier=Modifier.padding(bottom=8.dp))
+            Row(Modifier.fillMaxWidth().height(22.dp),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
+                Text(vm.film.note,color=Soft,fontSize=9.sp)
+                Text("镜头 ⓘ",color=Amber,fontSize=10.sp,modifier=Modifier.clickable {showLenses=true}.padding(horizontal=8.dp))
+            }
+            FilmStrip(vm.film,{if(!vm.shooting)vm.chooseFilm(it)},Modifier.padding(vertical=4.dp))
+            Row(Modifier.fillMaxWidth().height(98.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
+                Box(Modifier.size(96.dp),contentAlignment=Alignment.Center) {FilmDial(vm.film.ordinal,{if(!vm.shooting)vm.chooseFilm(Film.entries[it])})}
+                Box(Modifier.size(80.dp).border(1.dp,Amber.copy(alpha=.5f),CircleShape).padding(5.dp).clip(CircleShape)
+                    .background(Brush.radialGradient(listOf(Paper,Color(0xFFBFB6A7))))
+                    .clickable(enabled=capture!=null&&!connecting&&!vm.shooting) {view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);vm.capture(capture)}
+                    .semantics {contentDescription=if(vm.shooting)"正在保存照片" else "快门"},contentAlignment=Alignment.Center) {
+                    if(vm.shooting)CircularProgressIndicator(Modifier.size(26.dp),color=Ink,strokeWidth=2.dp)else Box(Modifier.size(60.dp).border(1.dp,Color(0xFF988C78),CircleShape))
+                }
+                Column(horizontalAlignment=Alignment.CenterHorizontally,modifier=Modifier.width(68.dp).clickable(onClick=open)) {
+                    Box(Modifier.size(54.dp).clip(RoundedCornerShape(3.dp)).border(1.dp,Amber.copy(alpha=.4f)).background(Color.Black).padding(3.dp),contentAlignment=Alignment.Center) {
+                        vm.negatives.firstOrNull()?.let {Thumb(vm,it)}?:Text("＋",color=Amber,fontSize=20.sp)
+                    }
+                    Text("底片盒",color=Soft,fontSize=10.sp,modifier=Modifier.padding(top=4.dp))
+                }
+            }
         }
+    }
+}
+
+@Composable private fun FocusMark(a:Adjust,modifier:Modifier) {
+    Canvas(modifier) {
+        val p=Offset(a.focusX*size.width,a.focusY*size.height)
+        drawCircle(Amber.copy(alpha=.8f),14.dp.toPx(),p,style=androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
+        drawCircle(Amber,1.5.dp.toPx(),p)
     }
 }
 
@@ -348,13 +372,13 @@ class MainActivity: ComponentActivity() {
                     .border(if(item.id==n.id)1.5.dp else .5.dp,if(item.id==n.id)Amber else Color(0xFF4B4640)).padding(4.dp).clickable { vm.persist(snapshot());selected=item.id }) { Thumb(vm,item) }
             }
         }
-        FilmStrip(film,{film=it; adjust=adjust.copy(grain=it.grain); vm.persist(snapshot())},Modifier.padding(vertical=6.dp))
+        FilmStrip(film,{film=it; adjust=adjust.copy(grain=TickScale(0f,1f).snap(it.grain)); vm.persist(snapshot())},Modifier.padding(vertical=6.dp))
         ParameterTabs(edit,{edit=it},listOf("曝光","层次","色彩","颗粒","光圈"))
         Box(Modifier.fillMaxWidth().heightIn(max=190.dp).verticalScroll(rememberScrollState())) {
             AdjustmentPanel(edit,adjust,film,{adjust=it},{vm.persist(snapshot())})
         }
         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
-            TextButton(onClick={adjust=Adjust(grain=film.grain);vm.persist(snapshot())}) { Text("重置",fontSize=12.sp) }
+            TextButton(onClick={adjust=Adjust(grain=TickScale(0f,1f).snap(film.grain));vm.persist(snapshot())}) { Text("重置",fontSize=12.sp) }
             Row(verticalAlignment=Alignment.CenterVertically) { Checkbox(border,{border=it}); Text("黑色胶片边框",color=Soft,fontSize=11.sp) }
         }
         Button(onClick={val snapshot=snapshot();vm.persist(snapshot);vm.export(snapshot,border)},enabled=!vm.exporting&&raw!=null,
@@ -363,8 +387,9 @@ class MainActivity: ComponentActivity() {
     }
     }
     // Save the latest controls when returning to the camera as well as when releasing a slider.
-    val finalSnapshot=rememberUpdatedState(snapshot())
-    DisposableEffect(n.id) { onDispose { vm.persist(finalSnapshot.value) } }
+    val finalSnapshot=remember(n.id) {java.util.concurrent.atomic.AtomicReference(snapshot())}
+    SideEffect {finalSnapshot.set(snapshot())}
+    DisposableEffect(n.id) {onDispose {vm.persist(finalSnapshot.get())}}
 }
 
 @Composable private fun ParameterTabs(current: String,choose: (String)->Unit,values: List<String>) {
@@ -382,7 +407,7 @@ class MainActivity: ComponentActivity() {
 @Composable private fun AdjustmentPanel(mode: String,a: Adjust,film: Film,change: (Adjust)->Unit,finish: ()->Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal=4.dp)) {
         when(mode) {
-            "曝光" -> Control("曝光 EV",a.exposure,-2f..2f,{change(a.copy(exposure=it))},finish)
+            "曝光" -> Control("曝光 EV",a.exposure,-3f..3f,{change(a.copy(exposure=it))},finish)
             "颗粒" -> Control("颗粒",a.grain,0f..1f,{change(a.copy(grain=it))},finish)
             "层次" -> {
                 Control("反差",a.contrast,.5f..1.5f,{change(a.copy(contrast=it))},finish)
@@ -397,23 +422,16 @@ class MainActivity: ComponentActivity() {
                 Control("蓝 B",-a.yellow,-1f..1f,{change(a.copy(yellow=-it))},finish)
             }
             "光圈" -> {
-                Text("${if(a.aperture>=16f)"全画面清晰" else "ƒ / ${a.aperture}"}  ·  模拟光圈",color=Amber,fontSize=11.sp,modifier=Modifier.padding(vertical=6.dp))
+                Control("模拟光圈",a.aperture,1.4f..16f,{change(a.copy(aperture=it))},finish)
                 LazyRow(horizontalArrangement=Arrangement.spacedBy(5.dp)) {
-                    items(listOf(1.4f,2f,2.8f,4f,5.6f,8f,11f,16f)) { value ->
-                        Choice(if(value==16f)"关闭" else "$value",a.aperture==value) { change(a.copy(aperture=value)); finish() }
-                    }
+                    items(listOf(1.4f,2.8f,5.6f,8f,16f)) {value->Choice(if(value==16f)"关闭" else "$value",a.aperture==value) {change(a.copy(aperture=value));finish()}}
                 }
-                Text("点击画面选择清晰区域 · 渐变虚化，无景深识别",fontSize=9.sp,color=Soft,modifier=Modifier.padding(vertical=8.dp))
+                Text("点击画面选择清晰区域",fontSize=9.sp,color=Soft,modifier=Modifier.padding(vertical=6.dp))
             }
         }
     }
 }
 
-@Composable private fun Control(title: String,value: Float,range: ClosedFloatingPointRange<Float>,change: (Float)->Unit,finish: ()->Unit) {
-    Row(Modifier.fillMaxWidth().height(48.dp),verticalAlignment=Alignment.CenterVertically) {
-        Text(title,color=Soft,fontSize=11.sp,modifier=Modifier.width(58.dp))
-        Slider(value,onValueChange=change,valueRange=range,onValueChangeFinished=finish,modifier=Modifier.weight(1f).semantics { contentDescription=title },
-            colors=SliderDefaults.colors(thumbColor=Paper,activeTrackColor=Amber,inactiveTrackColor=Color(0xFF48403B)))
-        Text("%.2f".format(if(abs(value)<.005f)0f else value),color=Amber,fontSize=10.sp,fontFamily=FontFamily.Monospace,modifier=Modifier.width(40.dp))
-    }
+@Composable private fun Control(title:String,value:Float,range:ClosedFloatingPointRange<Float>,change:(Float)->Unit,finish:()->Unit) {
+    TickRuler(title,value,range,change,finish)
 }

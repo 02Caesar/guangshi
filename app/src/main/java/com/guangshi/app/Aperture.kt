@@ -7,7 +7,7 @@ import kotlin.math.*
 
 /** Region blur, not depth estimation. The tapped ellipse remains sharp at every output resolution. */
 internal suspend fun applyAperture(image: Bitmap, a: Adjust): Bitmap {
-    if(a.aperture >= 15.9f) return image
+    if(a.aperture >= 16f) return image
     val ratio=min(1f,480f/max(image.width,image.height))
     val small=Bitmap.createScaledBitmap(image,max(1,(image.width*ratio).roundToInt()),max(1,(image.height*ratio).roundToInt()),true)
     val w=small.width; val h=small.height
