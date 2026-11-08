@@ -91,6 +91,31 @@ class FilmStoreTest {
         assertEquals(Color.BLACK,raw.getPixel(1,1))
         raw.recycle();result.recycle()
     }
+    @Test fun batchTrashSurvivesRestartAndRestoresOriginalsAndEdits() {
+        val second=n.copy(id="1700000000001_test",adjust=Adjust(exposure=.7f))
+        store.original(id).copyTo(store.original(second.id),overwrite=true); store.save(second)
+        val before=store.original(id).readBytes()
+        listOf(id,second.id).forEach { store.setDeleted(it,true) }
+        val restarted=FilmStore(context)
+        assertFalse(restarted.list().any { it.id in listOf(id,second.id) })
+        assertTrue(restarted.list(true).map { it.id }.containsAll(listOf(id,second.id)))
+        // Late editor disposal must not resurrect a deleted negative.
+        restarted.save(n.copy(adjust=Adjust(exposure=1f)))
+        assertFalse(restarted.list().any { it.id==id })
+        listOf(id,second.id).forEach { restarted.setDeleted(it,false) }
+        val restored=FilmStore(context)
+        assertEquals(second,restored.list().first { it.id==second.id })
+        assertEquals(1f,restored.list().first { it.id==id }.adjust.exposure)
+        assertFalse(restored.list(true).any { it.id in listOf(id,second.id) })
+        assertArrayEquals(before,restored.original(id).readBytes())
+    }
+    @Test fun deletionIsIdempotentAndUnknownNegativeDoesNotCreateMarker() {
+        repeat(2) {store.setDeleted(id,true)}
+        repeat(2) {store.setDeleted(id,false)}
+        assertTrue(store.list().any {it.id==id})
+        assertThrows(IllegalStateException::class.java) {store.setDeleted("missing",true)}
+        assertFalse(File(store.dir,"missing.deleted").exists())
+    }
     data class Row(val file:File,val values:ContentValues)
     class TestMediaProvider: ContentProvider() {
         val rows=linkedMapOf<Uri,Row>()

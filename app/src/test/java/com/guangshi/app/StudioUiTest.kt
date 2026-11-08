@@ -78,6 +78,21 @@ class StudioUiTest {
         compose.onNodeWithContentDescription("曝光 EV 增加 0.1").performClick()
         compose.runOnIdle {Assert.assertEquals(.1f,model.cameraAdjust.exposure)}
     }
+    @Test fun multiSelectDeletionAndTrashRecoveryWorkWhenBoxBecomesEmpty() {
+        compose.waitUntil(10000) { model.negatives.isNotEmpty() }
+        compose.onNodeWithText("暗房 ↗").performClick()
+        compose.onNode(hasText("管理底片 · 多选删除",substring=true)).performClick()
+        compose.onNodeWithText("全选").performClick()
+        compose.onNodeWithText("删除所选（1）").performClick()
+        compose.onNodeWithText("移入回收站").performClick()
+        compose.waitUntil(10000) { compose.waitForIdle(); !model.managing && model.negatives.isEmpty() && model.trash.size==1 }
+        compose.onNodeWithText("回收站（1）").performClick()
+        compose.onNodeWithText("全选").performClick()
+        compose.onNodeWithText("恢复所选（1）").performClick()
+        compose.waitUntil(10000) { compose.waitForIdle(); !model.managing && model.negatives.size==1 && model.trash.isEmpty() }
+        compose.onNodeWithText("完成").performClick()
+        compose.onNodeWithText("冲印 · 导出到系统相册").assertExists()
+    }
     private fun centerRed():Int {
         val center=compose.onNodeWithContentDescription("实时画面").fetchSemanticsNode().boundsInRoot.center
         var value=0

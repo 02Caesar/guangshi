@@ -16,6 +16,8 @@ import java.util.UUID
 class StudioModel(app: Application): AndroidViewModel(app) {
     val store=FilmStore(app)
     var negatives by mutableStateOf<List<Negative>>(emptyList()); private set
+    var trash by mutableStateOf<List<Negative>>(emptyList()); private set
+    var managing by mutableStateOf(false); private set
     var message by mutableStateOf("")
     var shooting by mutableStateOf(false); private set
     var exporting by mutableStateOf(false); private set
@@ -26,7 +28,23 @@ class StudioModel(app: Application): AndroidViewModel(app) {
     init { reload() }
 
     fun chooseFilm(value: Film) { film=value; cameraAdjust=cameraAdjust.copy(grain=TickScale(0f,1f).snap(value.grain)) }
-    fun reload() { viewModelScope.launch { negatives=withContext(Dispatchers.IO) { store.list() } } }
+    fun reload() { viewModelScope.launch { saveMutex.withLock { refreshLists() } } }
+    private suspend fun refreshLists() {
+        val lists=withContext(Dispatchers.IO) { store.list() to store.list(true) }
+        negatives=lists.first; trash=lists.second
+    }
+    fun moveNegatives(ids: Set<String>, deleted: Boolean) {
+        if(managing || ids.isEmpty()) return
+        managing=true
+        viewModelScope.launch { saveMutex.withLock {
+            var count=0
+            try {
+                withContext(Dispatchers.IO) { ids.forEach { store.setDeleted(it,deleted); count++ } }
+                message=if(deleted)"已将 $count 张底片移入回收站，可随时恢复" else "已恢复 $count 张底片"
+            } catch(e:Exception) { Log.e("Guangshi","Move negatives",e); message="已处理 $count 张，部分操作失败，请重试" }
+            finally { refreshLists(); managing=false }
+        } }
+    }
     fun capture(capture: ImageCapture?) {
         if(shooting || capture==null)return
         shooting=true

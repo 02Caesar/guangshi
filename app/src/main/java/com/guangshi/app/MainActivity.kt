@@ -310,7 +310,7 @@ class MainActivity: ComponentActivity() {
     }
 }
 
-@Composable private fun Thumb(vm: StudioModel,n: Negative) {
+@Composable internal fun Thumb(vm: StudioModel,n: Negative) {
     var bitmap by remember(n.id,n.film,n.adjust) { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(n.id,n.film,n.adjust) {
         try { bitmap=withContext(Dispatchers.Default) { val raw=vm.store.load(n.id,140); try { develop(raw,n.film,n.adjust) } finally { raw.recycle() } } }
@@ -321,6 +321,8 @@ class MainActivity: ComponentActivity() {
 }
 
 @Composable private fun Darkroom(vm: StudioModel,modifier: Modifier) {
+    var manager by rememberSaveable { mutableStateOf(false) }
+    if(manager) NegativeManager(vm) { manager=false }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     val n=vm.negatives.find { it.id==selected }?:vm.negatives.firstOrNull()
     var adjust by remember(n?.id) { mutableStateOf(n?.adjust?:Adjust()) }
@@ -347,7 +349,10 @@ class MainActivity: ComponentActivity() {
         }
     }
     if(n==null) {
-        Box(modifier.fillMaxWidth(),contentAlignment=Alignment.Center) { Text("底片盒还是空的\n回到相机，拍下第一束光。",color=Amber,lineHeight=30.sp) }
+        Column(modifier.fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
+            Text("底片盒还是空的\n回到相机，拍下第一束光。",color=Amber,lineHeight=30.sp)
+            TextButton(onClick={manager=true}) { Text("管理底片 · 回收站（${vm.trash.size}）") }
+        }
         return
     }
     fun snapshot()=n.copy(film=film,adjust=adjust)
@@ -366,6 +371,7 @@ class MainActivity: ComponentActivity() {
             Text(if(compare)"原始底片" else film.note,color=Soft,fontSize=10.sp)
             Box(Modifier.clip(RoundedCornerShape(16.dp)).background(Color(0xFF48292A)).pointerInput(Unit) { detectTapGestures(onPress={compare=true;try { tryAwaitRelease() } finally {compare=false} }) }.padding(horizontal=12.dp,vertical=10.dp)) { Text("按住看原片",color=Amber,fontSize=11.sp) }
         }
+        TextButton(onClick={vm.persist(snapshot());manager=true}) { Text("管理底片 · 多选删除 / 回收站（${vm.trash.size}）",fontSize=11.sp) }
         LazyRow(Modifier.fillMaxWidth().height(76.dp).padding(vertical=5.dp),horizontalArrangement=Arrangement.spacedBy(7.dp)) {
             items(vm.negatives,key={it.id}) { item ->
                 Box(Modifier.width(64.dp).fillMaxHeight().clip(RoundedCornerShape(2.dp)).background(Color.Black)

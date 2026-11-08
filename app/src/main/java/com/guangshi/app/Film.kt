@@ -29,7 +29,7 @@ data class Negative(val id: String, val film: Film, val adjust: Adjust, val foca
 class FilmStore(val context: Context) {
     val dir = File(context.filesDir, "negatives").apply { mkdirs() }
     fun original(id: String) = File(dir, "$id.jpg")
-    fun list(): List<Negative> = dir.listFiles().orEmpty().filter { it.extension == "json" }.mapNotNull { f ->
+    fun list(deleted: Boolean = false): List<Negative> = dir.listFiles().orEmpty().filter { it.extension == "json" }.mapNotNull { f ->
         runCatching {
             val j = JSONObject(f.readText())
             val film = Film.entries.find { it.name == j.getString("film") } ?: Film.NATURAL
@@ -41,7 +41,16 @@ class FilmStore(val context: Context) {
                 aperture=read("aperture",16f).coerceIn(1.4f,16f), focusX=read("focusX",.5f).coerceIn(0f,1f), focusY=read("focusY",.45f).coerceIn(0f,1f)
             ), j.optInt("focalMm",24))
         }.getOrNull()
-    }.filter { original(it.id).exists() }.sortedByDescending { it.id }
+    }.filter { original(it.id).exists() && File(dir,"${it.id}.deleted").exists() == deleted }.sortedByDescending { it.id }
+
+    /** Tombstones preserve both JPEG and edits; saving edits never resurrects a negative. */
+    fun setDeleted(id: String, deleted: Boolean) {
+        require(id.matches(Regex("[A-Za-z0-9_]+")))
+        check(original(id).isFile && File(dir,"$id.json").isFile) { "底片不存在" }
+        val marker=File(dir,"$id.deleted")
+        if(deleted) check(marker.exists() || marker.createNewFile()) { "无法移入回收站" }
+        else check(!marker.exists() || marker.delete()) { "无法恢复底片" }
+    }
 
     fun save(n: Negative) {
         val a=n.adjust

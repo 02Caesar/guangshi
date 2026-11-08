@@ -1,8 +1,16 @@
 # 光室 · 收集光，也收藏时间
 
-**[直接下载 0.3.0 调试 APK](https://raw.githubusercontent.com/02Caesar/guangshi/main/downloads/guangshi-0.3.0-debug.apk)** · [仓库](https://github.com/02Caesar/guangshi)
+**[直接下载 0.4.0 调试 APK](https://raw.githubusercontent.com/02Caesar/guangshi/main/downloads/guangshi-0.4.0-debug.apk)** · [仓库](https://github.com/02Caesar/guangshi)
 
 原生 Android 胶片相机。Kotlin、Jetpack Compose、CameraX；Android 10 及以上。针对 OPPO Find X8s+ / ColorOS 的普通竖屏设计。拍摄、实时滤镜、暗房与导出全部在本机完成，不请求网络权限，不需要登录。
+
+## 0.4.0：底片多选删除与恢复
+
+暗房点击「管理底片 · 多选删除 / 回收站」，点选多张或全选，确认后移入回收站。切换「回收站」同样可多选恢复。底片盒为空时仍有管理入口。
+
+原始 JPEG 与调色参数均留在本机，重启后仍可恢复；本版不会自动清空回收站，因此删除不释放原图空间。已导出到系统相册的照片不受影响。卸载或清除应用数据会删除私人底片，请覆盖安装升级。
+
+如果手机无法连接 raw.githubusercontent.com，可下载 [备用 ZIP](https://codeload.github.com/02Caesar/guangshi/zip/refs/heads/main)，解压后打开 downloads/guangshi-0.4.0-debug.apk。
 
 ## 0.3.0：更大的取景框与更快的预览
 

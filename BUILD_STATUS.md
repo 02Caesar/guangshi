@@ -1,18 +1,19 @@
-# 光室 0.3.0 构建与验收状态
+# 光室 0.4.0 构建与验收状态
 
 验证日期：2026-11-08（北京时间）。
 
 ## 本环境已验证
 
 - `./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebug`：全部成功。
-- 36 项测试通过，0 失败、0 错误、0 跳过；Lint：0 错误、0 警告。
+- 39 项测试通过，0 失败、0 错误、0 跳过；Lint：0 错误、0 警告。
 - Android 15 原生图形引擎直接编译生产 AGSL 资源；通过 RenderNode 硬件录制及离屏读回，比较 6 种滤镜、曝光/RGB/反差/饱和度参数与 CPU 导出。抽样各通道误差不超过 3/255。
 - 验证颗粒改变图像、模拟光圈保留点击中心并模糊外围，以及无新相机帧时更新 RenderEffect、预览宿主重挂载时更新效果。
 - 刻度整数化测试验证 0.1 步进、正反调节不累积漂移和范围边界；Compose 验证顶部控制位置、浮层展开前后取景区域尺寸不变、红圈提示不存在、每次 ＋ 为 0.1。
 - 保留暗房 RGB 实际像素变化、小窗口导出可达、原图尺寸溢出、EXIF 方向、两种边框导出、失败回滚、旧底片读取及焦段决策回归。
+- 新增多选删除、确认取消、回收站多选恢复；存储测试覆盖批量删除后重新读取、原片字节保留、参数保留、重复操作及延迟保存不复活底片。Compose 测试覆盖删除全部、空底片盒与回收站恢复流程。
 - UI 截图位于 docs/screenshots，使用合成测试图和未授权相机界面，不是 OPPO 实拍。
-- APK：com.guangshi.app，versionCode=3，versionName=0.3.0，minSdk=29，targetSdk=35。
-- APK SHA-256：`766b07b70506c0b7964de25f8734a591943dc663a99314b20107b03e5f87d6c2`。
+- APK：com.guangshi.app，versionCode=4，versionName=0.4.0，minSdk=29，targetSdk=35。
+- APK SHA-256：`5f59a004c2e6422669a49471e861a9a2716083c04c6eeb4f35596c56d5310bd4`。
 - 调试签名证书 SHA-256 与此前交付版本一致：`7809d0a2fee8a8401792dcf7630352694f792b3e91ff69008dd995ad71abd20e`。直接覆盖安装，勿先卸载。
 
 ## 实现和测试边界
