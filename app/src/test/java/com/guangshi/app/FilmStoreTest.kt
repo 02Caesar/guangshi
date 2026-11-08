@@ -116,6 +116,20 @@ class FilmStoreTest {
         assertThrows(IllegalStateException::class.java) {store.setDeleted("missing",true)}
         assertFalse(File(store.dir,"missing.deleted").exists())
     }
+    @Test fun xpanMetadataAndCropPersistWithoutChangingRaw() {
+        val before=store.original(id).readBytes()
+        store.save(n.copy(xpan=true))
+        val restarted=FilmStore(context)
+        assertTrue(restarted.list().first {it.id==id}.xpan)
+        val wide=restarted.load(id,Int.MAX_VALUE)
+        assertEquals(80,wide.width);assertEquals(30,wide.height)
+        assertArrayEquals(before,restarted.original(id).readBytes());wide.recycle()
+        assertEquals("0.6x",zoomLabel(15));assertEquals("1.0x",zoomLabel(24));assertEquals("6.0x",zoomLabel(146))
+        for((w,h) in listOf(240 to 320,320 to 240,1 to 1)) {
+            val c=wideCrop(w,h)
+            assertTrue(c[0]>=0 && c[1]>=0 && c[0]+c[2]<=w && c[1]+c[3]<=h)
+        }
+    }
     data class Row(val file:File,val values:ContentValues)
     class TestMediaProvider: ContentProvider() {
         val rows=linkedMapOf<Uri,Row>()

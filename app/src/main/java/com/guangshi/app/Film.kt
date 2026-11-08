@@ -25,7 +25,7 @@ data class Adjust(
     val contrast: Float = 1f, val saturation: Float = 1f, val warmth: Float = 0f,
     val aperture: Float = 16f, val focusX: Float = .5f, val focusY: Float = .45f
 )
-data class Negative(val id: String, val film: Film, val adjust: Adjust, val focalMm: Int = 24)
+data class Negative(val id: String, val film: Film, val adjust: Adjust, val focalMm: Int = 24, val xpan: Boolean = false)
 class FilmStore(val context: Context) {
     val dir = File(context.filesDir, "negatives").apply { mkdirs() }
     fun original(id: String) = File(dir, "$id.jpg")
@@ -39,7 +39,7 @@ class FilmStore(val context: Context) {
                 cyan=read("cyan",0f).coerceIn(-1f,1f), magenta=read("magenta",0f).coerceIn(-1f,1f), yellow=read("yellow",0f).coerceIn(-1f,1f),
                 contrast=read("contrast",1f).coerceIn(.5f,1.5f), saturation=read("saturation",1f).coerceIn(0f,1.5f), warmth=read("warmth",0f).coerceIn(-1f,1f),
                 aperture=read("aperture",16f).coerceIn(1.4f,16f), focusX=read("focusX",.5f).coerceIn(0f,1f), focusY=read("focusY",.45f).coerceIn(0f,1f)
-            ), j.optInt("focalMm",24))
+            ), j.optInt("focalMm",24),j.optBoolean("xpan",false))
         }.getOrNull()
     }.filter { original(it.id).exists() && File(dir,"${it.id}.deleted").exists() == deleted }.sortedByDescending { it.id }
 
@@ -54,7 +54,7 @@ class FilmStore(val context: Context) {
 
     fun save(n: Negative) {
         val a=n.adjust
-        val j=JSONObject().put("film",n.film.name).put("focalMm",n.focalMm)
+        val j=JSONObject().put("film",n.film.name).put("focalMm",n.focalMm).put("xpan",n.xpan)
             .put("exposure",a.exposure).put("grain",a.grain).put("cyan",a.cyan).put("magenta",a.magenta).put("yellow",a.yellow)
             .put("contrast",a.contrast).put("saturation",a.saturation).put("warmth",a.warmth)
             .put("aperture",a.aperture).put("focusX",a.focusX).put("focusY",a.focusY)
@@ -69,8 +69,15 @@ class FilmStore(val context: Context) {
         val decoded=requireNotNull(BitmapFactory.decodeFile(file.path,BitmapFactory.Options().apply { inSampleSize=sample; inPreferredConfig=Bitmap.Config.ARGB_8888 }))
         val exif=ExifInterface(file)
         val matrix=Matrix().apply { if(exif.isFlipped) postScale(-1f,1f); postRotate(exif.rotationDegrees.toFloat()) }
-        val oriented=Bitmap.createBitmap(decoded,0,0,decoded.width,decoded.height,matrix,true)
+        var oriented=Bitmap.createBitmap(decoded,0,0,decoded.width,decoded.height,matrix,true)
         if(oriented!==decoded) decoded.recycle()
+        val wide=runCatching { JSONObject(File(dir,"$id.json").readText()).optBoolean("xpan",false) }.getOrDefault(false)
+        if(wide) {
+            val bounds=wideCrop(oriented.width,oriented.height)
+            val cropped=Bitmap.createBitmap(oriented,bounds[0],bounds[1],bounds[2],bounds[3])
+            if(cropped!==oriented)oriented.recycle()
+            oriented=cropped
+        }
         val ratio=min(1f,maxEdge.toFloat()/max(oriented.width,oriented.height))
         if(ratio==1f) return oriented
         return Bitmap.createScaledBitmap(oriented,(oriented.width*ratio).roundToInt(),(oriented.height*ratio).roundToInt(),true).also { if(it!==oriented) oriented.recycle() }

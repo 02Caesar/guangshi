@@ -1,8 +1,16 @@
 # 光室 · 收集光，也收藏时间
 
-**[直接下载 0.4.0 调试 APK](https://raw.githubusercontent.com/02Caesar/guangshi/main/downloads/guangshi-0.4.0-debug.apk)** · [仓库](https://github.com/02Caesar/guangshi)
+**[直接下载 0.5.0 调试 APK](https://raw.githubusercontent.com/02Caesar/guangshi/main/downloads/guangshi-0.5.0-debug.apk)** · [仓库](https://github.com/02Caesar/guangshi)
 
 原生 Android 胶片相机。Kotlin、Jetpack Compose、CameraX；Android 10 及以上。针对 OPPO Find X8s+ / ColorOS 的普通竖屏设计。拍摄、实时滤镜、暗房与导出全部在本机完成，不请求网络权限，不需要登录。
+
+## 0.5.0：首页调校、取景修复与 XPAN
+
+- 修复 GPU 滤镜在取景框外输出不透明像素导致的边缘拉伸、覆盖上下控件；着色器边界透明、取景框裁剪，控制区有实色衬底。
+- 首页顶部直接调节曝光、光圈、颗粒、色彩，效果实时更新；默认展开曝光刻度，保留 0.1 步进。
+- 紧凑倍率按钮 0.6x / 1.0x / 2.0x / 3.0x / 6.0x；点击显示目标毫米数，1.5 秒后恢复倍率。1x 档仍循环 24/28/35，3x 档仍循环 73/85。
+- 橙色 76dp 快门，首页可切换照片 / XPAN。XPAN 横向 65:24、竖向 24:65；取景遮幅对应居中裁切，原片保留，暗房、缩略图与导出按底片模式显示。拍摄保存后呈现负片转正片的显影动画，可跳过。
+- XPAN 为本应用的宽幅模拟，不调用 OPPO 私有算法。官方资料请求被云环境网络策略拒绝，未独立核对 OPPO 的逐帧动画或专用成像算法。手机端仍需验证裁切与显影体验。
 
 ## 0.4.0：底片多选删除与恢复
 
@@ -10,7 +18,7 @@
 
 原始 JPEG 与调色参数均留在本机，重启后仍可恢复；本版不会自动清空回收站，因此删除不释放原图空间。已导出到系统相册的照片不受影响。卸载或清除应用数据会删除私人底片，请覆盖安装升级。
 
-如果手机无法连接 raw.githubusercontent.com，可下载 [备用 ZIP](https://codeload.github.com/02Caesar/guangshi/zip/refs/heads/main)，解压后打开 downloads/guangshi-0.4.0-debug.apk。
+如果手机无法连接 raw.githubusercontent.com，可下载 [备用 ZIP](https://codeload.github.com/02Caesar/guangshi/zip/refs/heads/main)，解压后打开 downloads/guangshi-0.5.0-debug.apk。
 
 ## 0.3.0：更大的取景框与更快的预览
 

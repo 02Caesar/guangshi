@@ -10,7 +10,7 @@ import androidx.camera.view.PreviewView
 internal class FilteredPreviewHost(context: Context):FrameLayout(context) {
     private var settings=RenderSettings(Film.NATURAL,Adjust())
     private var effect:GpuFilmEffect?=null
-    init {setLayerType(View.LAYER_TYPE_HARDWARE,null)}
+    init {clipChildren=true;clipToPadding=true;setBackgroundColor(android.graphics.Color.BLACK);setLayerType(View.LAYER_TYPE_HARDWARE,null)}
     fun attachPreview(preview:PreviewView,effect:GpuFilmEffect) {
         this.effect=effect
         (preview.parent as? android.view.ViewGroup)?.removeView(preview)

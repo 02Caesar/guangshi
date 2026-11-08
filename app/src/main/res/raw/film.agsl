@@ -30,6 +30,7 @@ float3 grade(float2 position) {
     return floor(clamp(c,0.0,1.0)*255.0+0.5)/255.0;
 }
 half4 main(float2 p) {
+    if(p.x<0.0 || p.y<0.0 || p.x>=size.x || p.y>=size.y) return half4(0);
     float3 sharp=grade(p);
     if(focus.x>=16.0) return half4(sharp,1);
     float strength=clamp((16.0-focus.x)/14.6,0.0,1.0);

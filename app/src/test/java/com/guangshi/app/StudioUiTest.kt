@@ -93,6 +93,20 @@ class StudioUiTest {
         compose.onNodeWithText("完成").performClick()
         compose.onNodeWithText("冲印 · 导出到系统相册").assertExists()
     }
+    @Test fun homeControlsAndXpanSwitchAreDirectlyAvailable() {
+        compose.onNodeWithContentDescription("曝光 EV").assertExists()
+        compose.onNodeWithContentDescription("曝光 EV 增加 0.1").performClick()
+        compose.runOnIdle {Assert.assertEquals(.1f,model.cameraAdjust.exposure)}
+        compose.onNodeWithText("光圈").performClick()
+        compose.onNodeWithContentDescription("模拟光圈").assertExists()
+        compose.onNodeWithText("颗粒").performClick()
+        compose.onNodeWithContentDescription("颗粒 增加 0.1").performClick()
+        compose.runOnIdle {Assert.assertEquals(.1f,model.cameraAdjust.grain)}
+        compose.onNodeWithText("XPAN").performClick()
+        compose.runOnIdle {Assert.assertTrue(model.xpan)}
+        compose.onNodeWithText("照片").performClick()
+        compose.runOnIdle {Assert.assertFalse(model.xpan)}
+    }
     private fun centerRed():Int {
         val center=compose.onNodeWithContentDescription("实时画面").fetchSemanticsNode().boundsInRoot.center
         var value=0

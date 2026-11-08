@@ -19,18 +19,31 @@ import org.robolectric.util.ReflectionHelpers.ClassParameter
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class GpuFilmEffectTest {
     private val context:Context get()=ApplicationProvider.getApplicationContext()
-    private fun render(input:Bitmap,film:Film,a:Adjust):Bitmap {
+    private fun render(input:Bitmap,film:Film,a:Adjust,pad:Int=0):Bitmap {
         val effect=GpuFilmEffect(context)
         effect.parameters(RenderSettings(film,a),input.width,input.height)
         effect.shader.setInputShader("image",BitmapShader(input,Shader.TileMode.CLAMP,Shader.TileMode.CLAMP))
-        val node=RenderNode("film-test").apply {setPosition(0,0,input.width,input.height)}
+        val node=RenderNode("film-test").apply {setPosition(0,0,input.width+2*pad,input.height+2*pad)}
         val recording=node.beginRecording()
-        recording.drawRect(0f,0f,input.width.toFloat(),input.height.toFloat(),Paint().apply {shader=effect.shader})
+        recording.translate(pad.toFloat(),pad.toFloat())
+        recording.drawRect(-pad.toFloat(),-pad.toFloat(),input.width.toFloat()+pad,input.height.toFloat()+pad,Paint().apply {shader=effect.shader})
         node.endRecording()
         val hardware=ReflectionHelpers.callStaticMethod<Bitmap>(HardwareRenderer::class.java,"createHardwareBitmap",
-            ClassParameter.from(RenderNode::class.java,node),ClassParameter.from(Int::class.javaPrimitiveType,input.width),ClassParameter.from(Int::class.javaPrimitiveType,input.height))
+            ClassParameter.from(RenderNode::class.java,node),ClassParameter.from(Int::class.javaPrimitiveType,input.width+2*pad),ClassParameter.from(Int::class.javaPrimitiveType,input.height+2*pad))
         return requireNotNull(hardware.copy(Bitmap.Config.ARGB_8888,false)).also {hardware.recycle()}
 
+    }
+    @Test fun pixelsOutsideViewfinderRemainTransparentForAllFilms() {
+        val input=Bitmap.createBitmap(24,32,Bitmap.Config.ARGB_8888).apply {eraseColor(Color.GRAY)}
+        for(film in Film.entries) {
+            val output=render(input,film,Adjust(aperture=2f),8)
+            assertEquals(0,Color.alpha(output.getPixel(0,20)))
+            assertEquals(0,Color.alpha(output.getPixel(20,0)))
+            assertEquals(0,Color.alpha(output.getPixel(39,47)))
+            assertEquals(255,Color.alpha(output.getPixel(20,20)))
+            output.recycle()
+        }
+        input.recycle()
     }
     @Test fun shaderCompilesAndMatchesExportToneForEveryFilm() {
         val input=Bitmap.createBitmap(24,32,Bitmap.Config.ARGB_8888)

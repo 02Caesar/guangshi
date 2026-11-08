@@ -23,6 +23,9 @@ class StudioModel(app: Application): AndroidViewModel(app) {
     var exporting by mutableStateOf(false); private set
     var film by mutableStateOf(Film.NATURAL); private set
     var cameraAdjust by mutableStateOf(Adjust())
+    var xpan by mutableStateOf(false)
+    var developedShot by mutableStateOf<Negative?>(null); private set
+    fun dismissDevelopment() { developedShot=null }
     var focalMm by mutableIntStateOf(24)
     private val saveMutex=Mutex()
     init { reload() }
@@ -49,7 +52,7 @@ class StudioModel(app: Application): AndroidViewModel(app) {
         if(shooting || capture==null)return
         shooting=true
         val id=System.currentTimeMillis().toString()+"_"+UUID.randomUUID().toString().take(4)
-        val snapshot=Negative(id,film,cameraAdjust,focalMm)
+        val snapshot=Negative(id,film,cameraAdjust,focalMm,xpan)
         val file=store.original(id)
         try {
             capture.takePicture(ImageCapture.OutputFileOptions.Builder(file).build(),ContextCompat.getMainExecutor(getApplication()),object: ImageCapture.OnImageSavedCallback {
@@ -57,6 +60,7 @@ class StudioModel(app: Application): AndroidViewModel(app) {
                     viewModelScope.launch {
                         try {
                             withContext(Dispatchers.IO) { store.save(snapshot) }
+                            if(snapshot.xpan)developedShot=snapshot
                             reload(); message="已收进底片 · ${snapshot.film.title}"
                         } catch(e:Exception) { Log.e("Guangshi","Save negative",e); message="照片已拍摄，底片信息保存失败，请重试" }
                         finally { shooting=false }
