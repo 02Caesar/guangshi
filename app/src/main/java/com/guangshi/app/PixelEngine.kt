@@ -11,6 +11,10 @@ internal object PixelEngine {
         var b=(c and 255)/255f
         fun curve(v: Float,k: Float)=((v-.5f)*k+.5f).coerceIn(0f,1f)
         when(film) {
+            Film.PASTEL -> {r=curve(r,.82f)*1.04f+.035f;g=curve(g,.86f)+.015f;b=curve(b,.85f)*1.04f+.025f}
+            Film.FOREST -> {r=curve(r,1.04f)*.94f+.02f;g=curve(g,.96f)*1.07f;b=curve(b,1.02f)*.91f}
+            Film.BLUE -> {r=curve(r,1.08f)*.86f+.01f;g=curve(g,1.02f)*.98f;b=curve(b,1.06f)*1.12f+.04f}
+            Film.SUNSET -> {r=curve(r,1.12f)*1.12f+.025f;g=curve(g,1.04f)*1.02f;b=curve(b,1.08f)*.78f}
             Film.NATURAL -> Unit
             Film.DAY -> { r=curve(r,1.06f)*1.06f+.018f; g=curve(g,1.02f)*1.01f; b=curve(b,.94f)*.9f+.015f }
             Film.NIGHT -> { r=curve(r,1.12f)*.88f; g=curve(g,1.08f)*1.02f+.012f; b=curve(b,1.08f)*1.13f+.025f }

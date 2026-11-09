@@ -1,8 +1,16 @@
 # 光室 · 收集光，也收藏时间
 
-**[直接下载 0.5.0 调试 APK](https://raw.githubusercontent.com/02Caesar/guangshi/main/downloads/guangshi-0.5.0-debug.apk)** · [仓库](https://github.com/02Caesar/guangshi)
+**[直接下载 0.6.0 调试 APK](https://raw.githubusercontent.com/02Caesar/guangshi/main/downloads/guangshi-0.6.0-debug.apk)** · [仓库](https://github.com/02Caesar/guangshi)
 
 原生 Android 胶片相机。Kotlin、Jetpack Compose、CameraX；Android 10 及以上。针对 OPPO Find X8s+ / ColorOS 的普通竖屏设计。拍摄、实时滤镜、暗房与导出全部在本机完成，不请求网络权限，不需要登录。
+
+## 0.6.0：紧凑机身与十款胶片
+
+- 快门独立居中；底片盒入口左下、金属拟物转盘右下。转盘拖动切换十档胶片，点按打开完整胶片列表。
+- 默认仅显示方框内的小号 EV 入口。单击展开二级参数面板，双击在 EV / 光圈 / 色彩 / 颗粒间循环并展开。刻度浮在画面上，保留 0.1 步进与实时效果，点击「收起」退出。
+- 焦段倍率外观缩到 34dp 高、10sp 字号；点击显示毫米数，1.5 秒后恢复倍率，24/28/35 和 73/85 循环保持。
+- XPAN 使用独立全屏机身页，隐藏常规标题和系统栏，系统手势可临时唤出。右下角胶卷按钮打开二级胶片菜单；窄长取景保持 24:65（横拍 65:24），完整原片与显影流程保留。
+- 新增柔粉晴空、森绿漫游、蓝调时刻、落日金橙，合计十款。每款有独立的 RGB 曲线和颗粒默认值，GPU 取景和 CPU 导出共同实现；已有底片枚举编号兼容。
 
 ## 0.5.0：首页调校、取景修复与 XPAN
 
@@ -18,7 +26,7 @@
 
 原始 JPEG 与调色参数均留在本机，重启后仍可恢复；本版不会自动清空回收站，因此删除不释放原图空间。已导出到系统相册的照片不受影响。卸载或清除应用数据会删除私人底片，请覆盖安装升级。
 
-如果手机无法连接 raw.githubusercontent.com，可下载 [备用 ZIP](https://codeload.github.com/02Caesar/guangshi/zip/refs/heads/main)，解压后打开 downloads/guangshi-0.5.0-debug.apk。
+如果手机无法连接 raw.githubusercontent.com，可下载 [备用 ZIP](https://codeload.github.com/02Caesar/guangshi/zip/refs/heads/main)，解压后打开 downloads/guangshi-0.6.0-debug.apk。
 
 ## 0.3.0：更大的取景框与更快的预览
 

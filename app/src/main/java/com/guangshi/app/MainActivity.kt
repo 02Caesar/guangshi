@@ -89,8 +89,8 @@ class MainActivity: ComponentActivity() {
     }
     Scaffold(containerColor=Ink,snackbarHost={ SnackbarHost(snackbar) },contentWindowInsets=WindowInsets.safeDrawing) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).background(Brush.verticalGradient(listOf(if(darkroom)Color(0xFF301B1C) else Color(0xFF252422),Ink)))) {
-            Column(Modifier.fillMaxSize().padding(horizontal=18.dp)) {
-                Row(Modifier.fillMaxWidth().height(if(darkroom)54.dp else 38.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
+            Column(Modifier.fillMaxSize().padding(horizontal=if(vm.xpan&&!darkroom)8.dp else 18.dp)) {
+                if(darkroom||!vm.xpan) Row(Modifier.fillMaxWidth().height(if(darkroom)54.dp else 38.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
                     Column {
                         Text("光室",color=Paper,fontSize=if(darkroom)25.sp else 22.sp,fontFamily=FontFamily.Serif,letterSpacing=6.sp)
                         if(darkroom)Text("让记忆慢慢显影",color=Soft,fontSize=10.sp,letterSpacing=2.sp)
@@ -103,10 +103,20 @@ class MainActivity: ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable private fun CameraScreen(vm: StudioModel,open: ()->Unit,modifier: Modifier) {
     val context=LocalContext.current
     val lifecycle=LocalLifecycleOwner.current
     val view=LocalView.current
+    DisposableEffect(vm.xpan) {
+        val window=(context as? android.app.Activity)?.window
+        val controller=window?.let {androidx.core.view.WindowCompat.getInsetsController(it,view)}
+        if(vm.xpan) {
+            controller?.systemBarsBehavior=androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller?.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        }
+        onDispose {controller?.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())}
+    }
     var granted by remember { mutableStateOf(context.checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED) }
     val permission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted=it }
     DisposableEffect(lifecycle) {
@@ -129,6 +139,9 @@ class MainActivity: ComponentActivity() {
     var connecting by remember { mutableStateOf(true) }
     var failed by remember { mutableStateOf(false) }
     var edit by rememberSaveable { mutableStateOf("曝光") }
+    var panelOpen by rememberSaveable {mutableStateOf(false)}
+    var filmMenu by rememberSaveable {mutableStateOf(false)}
+    if(filmMenu) FilmMenu(vm.film,{vm.chooseFilm(it);filmMenu=false},{filmMenu=false})
     var focalFlash by remember {mutableStateOf<Int?>(null)}
     var flashMm by remember {mutableIntStateOf(24)}
     var focalTap by remember {mutableIntStateOf(0)}
@@ -155,22 +168,27 @@ class MainActivity: ComponentActivity() {
     BoxWithConstraints(modifier) {
         val compact=maxHeight<540.dp
         Column(Modifier.fillMaxWidth().then(if(compact)Modifier.verticalScroll(rememberScrollState()) else Modifier.fillMaxHeight())) {
-            Column(Modifier.fillMaxWidth().background(Ink).padding(horizontal=8.dp)) {
-                ParameterTabs(edit,{edit=it},listOf("曝光","颗粒","色彩","光圈"))
-                Box(Modifier.fillMaxWidth().height(if(edit=="色彩")150.dp else 76.dp).verticalScroll(rememberScrollState())) {
-                    AdjustmentPanel(edit,vm.cameraAdjust,vm.film,{vm.cameraAdjust=it},{})
+            Row(Modifier.fillMaxWidth().height(42.dp),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
+                Box(Modifier.border(.7.dp,Soft.copy(alpha=.5f),RoundedCornerShape(8.dp)).background(Ink,RoundedCornerShape(8.dp))
+                    .combinedClickable(onClick={panelOpen=!panelOpen},onDoubleClick={
+                        val modes=listOf("曝光","光圈","色彩","颗粒");edit=modes[(modes.indexOf(edit)+1)%modes.size];panelOpen=true
+                    }).semantics {contentDescription="调校菜单"}.padding(horizontal=12.dp,vertical=9.dp)) {
+                    Text("${if(edit=="曝光")"EV" else edit}  ${if(edit=="曝光")"%.1f".format(vm.cameraAdjust.exposure) else "⌄"}",color=Amber,fontSize=11.sp)
                 }
+                Text(if(vm.xpan)"光室  /  XPAN" else vm.film.code,color=Amber,fontSize=10.sp,letterSpacing=2.sp)
+                Text("镜头 ⓘ",color=Soft,fontSize=10.sp,modifier=Modifier.clickable {showLenses=true}.padding(10.dp))
             }
-            Row(Modifier.fillMaxWidth().padding(vertical=4.dp),horizontalArrangement=Arrangement.SpaceBetween) {
+            if(!vm.xpan) Row(Modifier.fillMaxWidth().padding(vertical=4.dp),horizontalArrangement=Arrangement.SpaceBetween) {
                 Text("${vm.film.title} · ${vm.film.code}",color=Amber,fontSize=10.sp)
                 Text("▸ ${"%03d".format(vm.negatives.size+1)}",color=Amber,fontSize=10.sp,fontFamily=FontFamily.Monospace)
             }
             Box(Modifier.fillMaxWidth().then(if(compact)Modifier.height(340.dp) else Modifier.weight(1f)).background(Color.Black)
                 .clipToBounds().semantics {contentDescription="相机取景区域"},contentAlignment=Alignment.Center) {
                 BoxWithConstraints(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) {
-                    val aspect=if(view.display?.rotation==android.view.Surface.ROTATION_90||view.display?.rotation==android.view.Surface.ROTATION_270)4f/3f else 3f/4f
+                    val landscape=view.display?.rotation==android.view.Surface.ROTATION_90||view.display?.rotation==android.view.Surface.ROTATION_270
+                    val aspect=if(vm.xpan) {if(landscape)65f/24f else 24f/65f} else if(view.display?.rotation==android.view.Surface.ROTATION_90||view.display?.rotation==android.view.Surface.ROTATION_270)4f/3f else 3f/4f
                     val imageWidth=minOf(maxWidth,maxHeight*aspect)
-                    Box(Modifier.width(imageWidth).height(imageWidth/aspect).clipToBounds()) {
+                    Box(Modifier.width(imageWidth).height(imageWidth/aspect).clipToBounds().then(if(vm.xpan)Modifier.border(2.dp,Brush.linearGradient(listOf(Color(0xFF646468),Color.Black,Color(0xFF45454A))),RoundedCornerShape(8.dp)) else Modifier)) {
                         if(granted) {
                             if(preview!=null&&gpu!=null&&Build.VERSION.SDK_INT>=33) {
                                 AndroidView(factory={FilteredPreviewHost(it).apply {attachPreview(preview,gpu)}},
@@ -187,41 +205,35 @@ class MainActivity: ComponentActivity() {
                             Button(onClick={permission.launch(Manifest.permission.CAMERA)}) {Text("开启相机")}
                             TextButton(onClick={context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:${context.packageName}")))}) {Text("权限设置",fontSize=12.sp)}
                         }
-                        if(vm.xpan) Canvas(Modifier.fillMaxSize()) {
-                            if(size.height>size.width) {
-                                val band=size.height*24f/65f
-                                val x=(size.width-band)/2
-                                drawRect(Color.Black,Offset.Zero,androidx.compose.ui.geometry.Size(x,size.height))
-                                drawRect(Color.Black,Offset(x+band,0f),androidx.compose.ui.geometry.Size(x,size.height))
-                                drawLine(Amber.copy(alpha=.6f),Offset(x,0f),Offset(x,size.height),1.dp.toPx())
-                                drawLine(Amber.copy(alpha=.6f),Offset(x+band,0f),Offset(x+band,size.height),1.dp.toPx())
-                            } else {
-                                val band=size.width*24f/65f
-                                val y=(size.height-band)/2
-                                drawRect(Color.Black,Offset.Zero,androidx.compose.ui.geometry.Size(size.width,y))
-                                drawRect(Color.Black,Offset(0f,y+band),androidx.compose.ui.geometry.Size(size.width,y))
-                            }
-                        }
-                        if(granted) LazyRow(Modifier.align(Alignment.BottomCenter).padding(bottom=8.dp).background(Color.Black.copy(alpha=.38f),RoundedCornerShape(24.dp)).padding(horizontal=5.dp,vertical=3.dp),
+                        if(granted) LazyRow(Modifier.align(Alignment.BottomCenter).padding(bottom=8.dp).background(Color.Black.copy(alpha=.28f),RoundedCornerShape(18.dp)).padding(horizontal=4.dp),
                             horizontalArrangement=Arrangement.spacedBy(3.dp),verticalAlignment=Alignment.CenterVertically) {
                             items(listOf(15,24,49,73,146)) {group->
                                 val selected=when(group) {24->vm.focalMm in listOf(24,28,35);73->vm.focalMm in listOf(73,85);else->vm.focalMm==group}
                                 val target=if(selected)nextFocal(group,vm.focalMm) else group
                                 val supported=catalog.isNotEmpty()&&chooseLens(catalog,target)!=null
                                 val label=if(focalFlash==group)"${flashMm} mm" else zoomLabel(if(selected)vm.focalMm else group)
-                                Box(Modifier.heightIn(min=44.dp).widthIn(min=44.dp).clip(CircleShape)
+                                Box(Modifier.height(34.dp).widthIn(min=34.dp).clip(CircleShape)
                                     .background(if(selected)Color(0xFF473521) else Color.Transparent)
                                     .clickable(enabled=supported&&!vm.shooting) {focalFlash=group;flashMm=target;focalTap++;capture=null;session?.selectFocal(target)}
                                     .semantics {contentDescription="焦段 $group";this.selected=selected}
-                                    .padding(horizontal=6.dp),contentAlignment=Alignment.Center) {
-                                    Text(label,color=if(selected)Amber else if(supported)Paper else Soft,fontSize=11.sp)
+                                    .padding(horizontal=4.dp),contentAlignment=Alignment.Center) {
+                                    Text(label,color=if(selected)Amber else if(supported)Paper else Soft,fontSize=10.sp)
                                 }
                             }
                         }
                     }
                 }
+                if(panelOpen) Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().background(Ink.copy(alpha=.97f),RoundedCornerShape(12.dp)).padding(8.dp)) {
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
+                        ParameterTabs(if(edit=="曝光")"EV" else edit,{edit=if(it=="EV")"曝光" else it},listOf("EV","光圈","色彩","颗粒"))
+                    }
+                    Box(Modifier.heightIn(max=if(edit=="色彩")190.dp else 112.dp).verticalScroll(rememberScrollState())) {
+                        AdjustmentPanel(edit,vm.cameraAdjust,vm.film,{vm.cameraAdjust=it},{})
+                    }
+                    Text("收起 ∧",color=Amber,fontSize=10.sp,modifier=Modifier.align(Alignment.End).clickable {panelOpen=false}.padding(8.dp))
+                }
             }
-            Row(Modifier.fillMaxWidth().background(Ink).height(22.dp),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
+            if(!vm.xpan) Row(Modifier.fillMaxWidth().background(Ink).height(22.dp),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
                 Text(vm.film.note,color=Soft,fontSize=9.sp)
                 Text("镜头 ⓘ",color=Amber,fontSize=10.sp,modifier=Modifier.clickable {showLenses=true}.padding(horizontal=8.dp))
             }
@@ -229,20 +241,24 @@ class MainActivity: ComponentActivity() {
                 TextButton(onClick={if(!vm.shooting)vm.xpan=false}) {Text("照片",color=if(!vm.xpan)Amber else Soft)}
                 TextButton(onClick={if(!vm.shooting)vm.xpan=true}) {Text("XPAN",color=if(vm.xpan)Amber else Soft)}
             }
-            FilmStrip(vm.film,{if(!vm.shooting)vm.chooseFilm(it)},Modifier.background(Ink).padding(vertical=4.dp))
-            Row(Modifier.fillMaxWidth().background(Ink).height(90.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
-                Box(Modifier.size(96.dp),contentAlignment=Alignment.Center) {FilmDial(vm.film.ordinal,{if(!vm.shooting)vm.chooseFilm(Film.entries[it])})}
-                Box(Modifier.size(76.dp).border(5.dp,Color(0xFF403530),CircleShape).padding(6.dp).clip(CircleShape)
+
+            Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xFF252527),Ink))).height(100.dp)) {
+                Box(Modifier.align(Alignment.Center).size(76.dp).border(5.dp,Color(0xFF403530),CircleShape).padding(6.dp).clip(CircleShape)
                     .background(Brush.verticalGradient(listOf(Color(0xFFFFAC22),Color(0xFFFF7900))))
                     .clickable(enabled=capture!=null&&!connecting&&!vm.shooting) {view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);vm.capture(capture)}
                     .semantics {contentDescription=if(vm.shooting)"正在保存照片" else "快门"},contentAlignment=Alignment.Center) {
                     if(vm.shooting)CircularProgressIndicator(Modifier.size(26.dp),color=Ink,strokeWidth=2.dp)
                 }
-                Column(horizontalAlignment=Alignment.CenterHorizontally,modifier=Modifier.width(68.dp).clickable(onClick=open)) {
+                Column(horizontalAlignment=Alignment.CenterHorizontally,modifier=Modifier.align(Alignment.CenterStart).width(76.dp).clickable(onClick=open).semantics {contentDescription="底片盒入口"}) {
                     Box(Modifier.size(54.dp).clip(RoundedCornerShape(3.dp)).border(1.dp,Amber.copy(alpha=.4f)).background(Color.Black).padding(3.dp),contentAlignment=Alignment.Center) {
                         vm.negatives.firstOrNull()?.let {Thumb(vm,it)}?:Text("＋",color=Amber,fontSize=20.sp)
                     }
                     Text("底片盒",color=Soft,fontSize=10.sp,modifier=Modifier.padding(top=4.dp))
+                }
+                Box(Modifier.align(Alignment.CenterEnd).size(80.dp),contentAlignment=Alignment.Center) {
+                    if(vm.xpan) Column(Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)).border(1.dp,Soft.copy(alpha=.4f),RoundedCornerShape(10.dp)).background(Brush.verticalGradient(listOf(Color(0xFF404044),Ink))).clickable {filmMenu=true}.padding(8.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
+                        Text(vm.film.code,color=Amber,fontSize=12.sp);Text("胶片 ⌃",color=Paper,fontSize=10.sp)
+                    } else FilmDial(vm.film.ordinal,{if(!vm.shooting)vm.chooseFilm(Film.entries[it])},{filmMenu=true})
                 }
             }
         }
@@ -276,49 +292,51 @@ class MainActivity: ComponentActivity() {
     }
 }
 
-@Composable private fun FilmDial(selected: Int,onChange: (Int)->Unit) {
+@Composable private fun FilmDial(selected: Int,onChange: (Int)->Unit,onOpen: ()->Unit) {
     val view=LocalView.current
     var turns by remember { mutableFloatStateOf(selected.toFloat()) }
     var previous by remember { mutableIntStateOf(selected) }
     LaunchedEffect(selected) {
         var delta=selected-previous
-        if(delta>3)delta-=6
-        if(delta< -3)delta+=6
+        if(delta>Film.entries.size/2)delta-=Film.entries.size
+        if(delta< -Film.entries.size/2)delta+=Film.entries.size
         turns+=delta; previous=selected
     }
-    val angle by animateFloatAsState(-turns*60f,spring(dampingRatio=.7f,stiffness=250f),label="机械吸附")
+    val angle by animateFloatAsState(-turns*(360f/Film.entries.size),spring(dampingRatio=.7f,stiffness=250f),label="机械吸附")
     val latest=rememberUpdatedState(selected)
     val choose=rememberUpdatedState(onChange)
+    val openMenu=rememberUpdatedState(onOpen)
     var drag by remember { mutableFloatStateOf(0f) }
-    Box(Modifier.size(112.dp).semantics {
+    Box(Modifier.size(80.dp).semantics {
         contentDescription="胶卷转盘，当前${Film.entries[selected].title}"
         stateDescription=Film.entries[selected].title
-        customActions=listOf(CustomAccessibilityAction("下一个滤镜") { choose.value((latest.value+1)%6); true },CustomAccessibilityAction("上一个滤镜") { choose.value((latest.value+5)%6); true })
-    }.pointerInput(Unit) {
+        customActions=listOf(CustomAccessibilityAction("下一个滤镜") { choose.value((latest.value+1)%Film.entries.size); true },CustomAccessibilityAction("上一个滤镜") { choose.value((latest.value+Film.entries.size-1)%Film.entries.size); true })
+    }.pointerInput(Unit) {detectTapGestures(onTap={openMenu.value()})}.pointerInput(Unit) {
         detectDragGestures(onDragStart={drag=0f},onDragEnd={drag=0f},onDragCancel={drag=0f}) { change,amount ->
             change.consume()
             val v=change.position-Offset(size.width/2f,size.height/2f)
             drag+=(v.x*amount.y-v.y*amount.x)/max(v.getDistance(),1f)
             if(abs(drag)>20.dp.toPx()) {
-                val next=(latest.value+(if(drag>0)-1 else 1)+6)%6
+                val next=(latest.value+(if(drag>0)-1 else 1)+Film.entries.size)%Film.entries.size
                 view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); choose.value(next); drag=0f
             }
         }
     },contentAlignment=Alignment.Center) {
         Canvas(Modifier.fillMaxSize().rotate(angle)) {
-            drawCircle(Brush.radialGradient(listOf(Color(0xFF464440),Color(0xFF181918))))
+            drawCircle(Brush.radialGradient(listOf(Color(0xFF55565B),Color(0xFF161718))))
+            drawCircle(Color(0xFF898A8C),radius=size.minDimension*.47f,style=androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
             drawCircle(Color(0xFF171818),radius=size.minDimension*.36f)
             for(i in 0 until 60) {
                 val a=i*PI/30; val outer=size.minDimension*.475f; val inner=outer-if(i%10==0)10.dp.toPx() else 4.dp.toPx()
                 drawLine(if(i%10==0)Amber else Soft.copy(alpha=.5f),center+Offset(cos(a).toFloat()*inner,sin(a).toFloat()*inner),center+Offset(cos(a).toFloat()*outer,sin(a).toFloat()*outer),1.dp.toPx())
             }
-            val paint=android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color=android.graphics.Color.rgb(231,184,121); textSize=9.dp.toPx(); textAlign=android.graphics.Paint.Align.CENTER }
-            listOf("00","400","800","100","200","500").forEachIndexed { i,label ->
-                val a=-PI/2+i*PI/3
+            val paint=android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color=android.graphics.Color.rgb(231,184,121); textSize=6.dp.toPx(); textAlign=android.graphics.Paint.Align.CENTER }
+            Film.entries.map {it.code.substringAfter("·").trim()}.forEachIndexed { i,label ->
+                val a=-PI/2+i*2*PI/Film.entries.size
                 drawContext.canvas.nativeCanvas.drawText(label,center.x+cos(a).toFloat()*size.minDimension*.27f,center.y+sin(a).toFloat()*size.minDimension*.27f+paint.textSize/3,paint)
             }
         }
-        Text("光",fontFamily=FontFamily.Serif,color=Amber,fontSize=18.sp)
+        Text("ISO",fontFamily=FontFamily.Monospace,color=Paper,fontSize=10.sp)
         Text("▼",color=Amber,fontSize=10.sp,modifier=Modifier.align(Alignment.TopCenter))
     }
 }

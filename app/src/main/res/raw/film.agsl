@@ -15,6 +15,10 @@ float3 grade(float2 position) {
     else if(film==3) { float l=curve(dot(float3(r,g,b),float3(0.2126,0.7152,0.0722)),1.48); r=l;g=l;b=l; }
     else if(film==4) { r=curve(r,0.77)*1.02+0.035;g=curve(g,0.8)+0.02;b=curve(b,0.72)*0.93+0.05; }
     else if(film==5) { float l=dot(float3(r,g,b),float3(0.2126,0.7152,0.0722));r=curve(r,1.12)+l*0.075-(1.0-l)*0.04;g=curve(g,1.06)+(1.0-l)*0.03;b=curve(b,1.1)+(1.0-l)*0.085-l*0.055; }
+    else if(film==6) {r=curve(r,0.82)*1.04+0.035;g=curve(g,0.86)+0.015;b=curve(b,0.85)*1.04+0.025;}
+    else if(film==7) {r=curve(r,1.04)*0.94+0.02;g=curve(g,0.96)*1.07;b=curve(b,1.02)*0.91;}
+    else if(film==8) {r=curve(r,1.08)*0.86+0.01;g=curve(g,1.02)*0.98;b=curve(b,1.06)*1.12+0.04;}
+    else if(film==9) {r=curve(r,1.12)*1.12+0.025;g=curve(g,1.04)*1.02;b=curve(b,1.08)*0.78;}
     c=float3(r,g,b);
     if(film!=3) {
         float l=dot(c,float3(0.2126,0.7152,0.0722));

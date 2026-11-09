@@ -17,7 +17,11 @@ enum class Film(val title: String, val code: String, val grain: Float, val note:
     NIGHT("冷夜景", "N · 800", .28f, "冷蓝阴影，城市夜色"),
     MONO("银盐黑白", "B · 100", .36f, "深黑与明亮的银"),
     FADE("褪色记忆", "F · 200", .24f, "低反差，柔和旧时光"),
-    CINEMA("青橙电影", "C · 500", .12f, "青色暗部，琥珀亮部")
+    CINEMA("青橙电影", "C · 500", .12f, "青色暗部，琥珀亮部"),
+    PASTEL("柔粉晴空", "P · 160", .1f, "低反差与轻柔粉色"),
+    FOREST("森绿漫游", "G · 200", .2f, "沉静绿影，柔暖高光"),
+    BLUE("蓝调时刻", "U · 800", .3f, "钴蓝阴影，清冷暮色"),
+    SUNSET("落日金橙", "S · 100", .1f, "金橙日落，浓郁暖色")
 }
 data class Adjust(
     val exposure: Float = 0f, val grain: Float = 0f,
